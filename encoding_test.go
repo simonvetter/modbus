@@ -312,3 +312,71 @@ func TestBytesToFloat32s(t *testing.T) {
 
 	return
 }
+
+func TestDecodeBools(t *testing.T) {
+	var results	[]bool
+
+	results	= decodeBools(1, []byte{0x01})
+	if len(results) != 1 {
+		t.Errorf("expected 1 value, got %v", len(results))
+	}
+	if results[0] != true {
+		t.Errorf("expected true, got false")
+	}
+
+	results	= decodeBools(1, []byte{0x0f})
+	if len(results) != 1 {
+		t.Errorf("expected 1 value, got %v", len(results))
+	}
+	if results[0] != true {
+		t.Errorf("expected true, got false")
+	}
+
+	results	= decodeBools(9, []byte{0x75, 0x03})
+	if len(results) != 9 {
+		t.Errorf("expected 9 values, got %v", len(results))
+	}
+	for i, b := range []bool{
+			true, false, true, false,	// 0x05
+			true, true, true, false,	// 0x07
+			true, } {			// 0x01
+		if b != results[i] {
+			t.Errorf("expected %v at %v, got %v", b, i, results[i])
+		}
+	}
+
+	return
+}
+
+func TestEncodeBools(t *testing.T) {
+	var results	[]byte
+
+	results	= encodeBools([]bool{false, true, false, true, })
+	if len(results) != 1 {
+		t.Errorf("expected 1 byte, got %v", len(results))
+	}
+	if results[0] != 0x0a {
+		t.Errorf("expected 0x0a, got 0x%02x", results[0])
+	}
+
+	results	= encodeBools([]bool{true, false, true, })
+	if len(results) != 1 {
+		t.Errorf("expected 1 byte, got %v", len(results))
+	}
+	if results[0] != 0x05 {
+		t.Errorf("expected 0x05, got 0x%02x", results[0])
+	}
+
+	results	= encodeBools([]bool{true, false, false, true, false, true, true, false,
+			             true, true, true, false, true, true, true, false,
+				     false, true})
+	if len(results) != 3 {
+		t.Errorf("expected 3 bytes, got %v", len(results))
+	}
+	if results[0] != 0x69 || results[1] != 0x77 || results[2] != 0x02 {
+		t.Errorf("expected {0x69, 0x77, 0x02}, got {0x%02x, 0x%02x, 0x%02x}",
+			 results[0], results[1], results[2])
+	}
+
+	return
+}
