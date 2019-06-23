@@ -9,16 +9,23 @@ import (
 
 type RegType	uint
 type Endianness uint
+type WordOrder	uint
 const (
-	PARITY_NONE		uint	= 0
-	PARITY_EVEN		uint	= 1
-	PARITY_ODD		uint	= 2
+	PARITY_NONE		uint		= 0
+	PARITY_EVEN		uint		= 1
+	PARITY_ODD		uint		= 2
 
-	HOLDING_REGISTER	RegType	= 0
-	INPUT_REGISTER		RegType	= 1
+	HOLDING_REGISTER	RegType		= 0
+	INPUT_REGISTER		RegType		= 1
 
-	BIG_ENDIAN		Endianness	= 0x00
-	LITTLE_ENDIAN		Endianness	= 0x01
+	// endianness of 16-bit registers
+	BIG_ENDIAN		Endianness	= 1
+	LITTLE_ENDIAN		Endianness	= 2
+
+	// word order of 32-bit registers
+	HIGH_WORD_FIRST		WordOrder	= 1
+	LOW_WORD_FIRST		WordOrder	= 2
+
 )
 
 type ClientConfiguration struct {
@@ -35,6 +42,7 @@ type ModbusClient struct {
 	logger		*logger
 	lock		sync.Mutex
 	endianness	Endianness
+	wordOrder	WordOrder
 	transport	transport
 	unitId		uint8
 }
@@ -94,6 +102,8 @@ func NewClient(conf *ClientConfiguration) (mc *ModbusClient, err error) {
 	}
 
 	mc.unitId	= 1
+	mc.endianness	= BIG_ENDIAN
+	mc.wordOrder	= HIGH_WORD_FIRST
 	mc.logger	= newLogger(fmt.Sprintf("modbus-client(%s)", mc.conf.URL))
 
 	return
@@ -129,12 +139,25 @@ func (mc *ModbusClient) SetUnitId(id uint8) (err error) {
 	return
 }
 
-// Sets the endianness of subsequent requests.
-func (mc *ModbusClient) SetEndianness(endianness Endianness) (err error) {
+// Sets the encoding (endianness and word ordering) of subsequent requests.
+func (mc *ModbusClient) SetEncoding(endianness Endianness, wordOrder WordOrder) (err error) {
 	mc.lock.Lock()
 	defer mc.lock.Unlock()
 
+	if endianness != BIG_ENDIAN && endianness != LITTLE_ENDIAN {
+		mc.logger.Errorf("unknown endianness value %v", endianness)
+		err	= ErrUnexpectedParameters
+		return
+	}
+
+	if wordOrder != HIGH_WORD_FIRST && wordOrder != LOW_WORD_FIRST {
+		mc.logger.Errorf("unknown word order value %v", wordOrder)
+		err	= ErrUnexpectedParameters
+		return
+	}
+
 	mc.endianness	= endianness
+	mc.wordOrder	= wordOrder
 
 	return
 }
@@ -162,6 +185,62 @@ func (mc *ModbusClient) ReadRegister(addr uint16, regType RegType) (value uint16
 	values, err	= mc.ReadRegisters(addr, 1, regType)
 	if err == nil {
 		value = values[0]
+	}
+
+	return
+}
+
+// Reads multiple 32-bit registers.
+func (mc *ModbusClient) ReadUint32s(addr uint16, quantity uint16, regType RegType) (values []uint32, err error) {
+	var mbPayload	[]byte
+
+	// read 2 * quantity uint16 registers, as bytes
+	mbPayload, err	= mc.readRegisters(addr, quantity * 2, regType)
+	if err != nil {
+		return
+	}
+
+	// decode payload bytes as uint32s
+	values	= bytesToUint32s(mc.endianness, mc.wordOrder, mbPayload)
+
+	return
+}
+
+// Reads a single 32-bit register.
+func (mc *ModbusClient) ReadUint32(addr uint16, regType RegType) (value uint32, err error) {
+	var values	[]uint32
+
+	values, err	= mc.ReadUint32s(addr, 1, regType)
+	if err == nil {
+		value	= values[0]
+	}
+
+	return
+}
+
+// Reads multiple 32-bit float registers.
+func (mc *ModbusClient) ReadFloat32s(addr uint16, quantity uint16, regType RegType) (values []float32, err error) {
+	var mbPayload	[]byte
+
+	// read 2 * quantity uint16 registers, as bytes
+	mbPayload, err	= mc.readRegisters(addr, quantity * 2, regType)
+	if err != nil {
+		return
+	}
+
+	// decode payload bytes as float32s
+	values	= bytesToFloat32s(mc.endianness, mc.wordOrder, mbPayload)
+
+	return
+}
+
+// Reads a single 32-bit float register.
+func (mc *ModbusClient) ReadFloat32(addr uint16, regType RegType) (value float32, err error) {
+	var values	[]float32
+
+	values, err	= mc.ReadFloat32s(addr, 1, regType)
+	if err == nil {
+		value	= values[0]
 	}
 
 	return
@@ -226,6 +305,48 @@ func (mc *ModbusClient) WriteRegisters(addr uint16, values []uint16) (err error)
 	}
 
 	err = mc.writeRegisters(addr, payload)
+
+	return
+}
+
+// Writes multiple 32-bit registers.
+func (mc *ModbusClient) WriteUint32s(addr uint16, values []uint32) (err error) {
+	var payload	[]byte
+
+	// turn registers to bytes
+	for _, value := range values {
+		payload	= append(payload, uint32ToBytes(mc.endianness, mc.wordOrder, value)...)
+	}
+
+	err = mc.writeRegisters(addr, payload)
+
+	return
+}
+
+// Writes a single 32-bit register.
+func (mc *ModbusClient) WriteUint32(addr uint16, value uint32) (err error) {
+	err = mc.writeRegisters(addr, uint32ToBytes(mc.endianness, mc.wordOrder, value))
+
+	return
+}
+
+// Writes multiple 32-bit float registers.
+func (mc *ModbusClient) WriteFloat32s(addr uint16, values []float32) (err error) {
+	var payload	[]byte
+
+	// turn registers to bytes
+	for _, value := range values {
+		payload	= append(payload, float32ToBytes(mc.endianness, mc.wordOrder, value)...)
+	}
+
+	err = mc.writeRegisters(addr, payload)
+
+	return
+}
+
+// Writes a single 32-bit float register.
+func (mc *ModbusClient) WriteFloat32(addr uint16, value float32) (err error) {
+	err = mc.writeRegisters(addr, float32ToBytes(mc.endianness, mc.wordOrder, value))
 
 	return
 }
