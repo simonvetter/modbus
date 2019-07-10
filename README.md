@@ -1,13 +1,18 @@
 ## Golang modbus client library
 
 ### Description
-
 This package is a golang implementation of the modbus protocol.
 It aims to provide a simple-to-use, high-level API to interact with modbus
 devices using native Go types.
 
 So far, only the client part is implemented, using either TCP or RTU (serial)
 as transports.
+
+A CLI client is available in cmd/modbus-cli.go and can be built with
+```bash
+$ go build -o modbus-cli cmd/modbus-cli.go
+$ ./modbus-cli --help
+```
 
 ### Getting started
 
