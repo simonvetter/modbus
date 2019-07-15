@@ -11,7 +11,7 @@ func TestAssembleRTUFrame(t *testing.T) {
 	var rt		*rtuTransport
 	var frame	[]byte
 
-	rt		= newRTUTransport(&ClientConfiguration{})
+	rt		= newRTUTransport(&ClientConfiguration{}, false)
 
 	frame		= rt.assembleRTUFrame(&request{
 		unitId:		0x33,
@@ -72,8 +72,8 @@ func TestRTUTransportReadResponse(t *testing.T) {
 
 	rt		= newRTUTransport(&ClientConfiguration{
 		Timeout: 10 * time.Millisecond,
-	})
-	rt.port		= p2
+	}, false)
+	rt.link		= p2
 
 	// read a valid response (illegal data address)
 	txchan		<- []byte{

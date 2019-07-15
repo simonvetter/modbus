@@ -3,6 +3,7 @@ package modbus
 import (
 	"fmt"
 	"io"
+	"net"
 	"time"
 
 	"github.com/goburrow/serial"
@@ -13,75 +14,96 @@ const (
 )
 
 type rtuTransport struct {
-	port		io.ReadWriteCloser
 	conf		*ClientConfiguration
 	logger		*logger
+	isOverTCP	bool
+	link		rtuLink
+}
+
+type rtuLink interface {
+	Close()		(error)
+	Read([]byte)	(int, error)
+	Write([]byte)	(int, error)
+	SetDeadline(time.Time)	(error)
 }
 
 // Returns a new RTU transport.
-func newRTUTransport(conf *ClientConfiguration) (rt *rtuTransport) {
+func newRTUTransport(conf *ClientConfiguration, isOverTCP bool) (rt *rtuTransport) {
 	rt = &rtuTransport{
-		conf:	conf,
-		logger:	newLogger(fmt.Sprintf("rtu-transport(%s)", conf.URL)),
+		conf:		conf,
+		logger:		newLogger(fmt.Sprintf("rtu-transport(%s)", conf.URL)),
+		isOverTCP:	isOverTCP,
 	}
 
 	return
 }
 
-// Opens the serial line.
+// Opens the rtu link.
 func (rt *rtuTransport) Open() (err error) {
-	var serialConf	*serial.Config
+	var parity	string
+	var port	serial.Port
 
-	serialConf	= &serial.Config{
-		Address:	rt.conf.URL,
-		BaudRate:	int(rt.conf.Speed),
-		DataBits:	int(rt.conf.DataBits),
-		StopBits:	int(rt.conf.StopBits),
-		Timeout:	rt.conf.Timeout,
+	if rt.isOverTCP {
+		rt.link, err	= net.DialTimeout("tcp", rt.conf.URL, 5 * time.Second)
+		if err != nil {
+			return
+		}
+	} else {
+		switch rt.conf.Parity {
+		case PARITY_NONE:	parity	= "N"
+		case PARITY_EVEN:	parity	= "E"
+		case PARITY_ODD:	parity	= "O"
+		}
+
+		port, err	= serial.Open(&serial.Config{
+			Address:	rt.conf.URL,
+			BaudRate:	int(rt.conf.Speed),
+			DataBits:	int(rt.conf.DataBits),
+			Parity:		parity,
+			StopBits:	int(rt.conf.StopBits),
+			Timeout:	10 * time.Millisecond,
+		})
+
+		if err != nil {
+			return
+		}
+
+		rt.link	= &serialPortWrapper{
+			port: port,
+		}
 	}
 
-	switch rt.conf.Parity {
-	case PARITY_NONE:	serialConf.Parity	= "N"
-	case PARITY_EVEN:	serialConf.Parity	= "E"
-	case PARITY_ODD:	serialConf.Parity	= "O"
-	}
-
-	rt.port, err	= serial.Open(serialConf)
-	if err != nil {
-		rt.logger.Errorf("failed to open serial device: %v", err)
-		return
-	}
+	// flush the receive buffer to avoid consuming stale data
+	discard(rt.link)
 
 	return
 }
 
-// Closes the serial line.
+// Closes the rtu link.
 func (rt *rtuTransport) Close() (err error) {
-	err = rt.port.Close()
-	if err != nil {
-		rt.logger.Errorf("failed to close serial device: %v", err)
-		return
-	}
+	err = rt.link.Close()
 
 	return
 }
 
-// Serializes and writes a request out to the serial line.
+// Serializes and writes a request out to the rtu link.
 func (rt *rtuTransport) WriteRequest(req *request) (err error) {
-	var byteCount	int
 	var adu		[]byte
 
 	// build an RTU ADU out of the request object
-	adu		= rt.assembleRTUFrame(req)
+	adu	= rt.assembleRTUFrame(req)
 
-	// send the final ADU+CRC on the wire
-	byteCount, err	= rt.port.Write(adu)
-	if byteCount != len(adu) {
+	// set an i/o deadline on the link
+	err	= rt.link.SetDeadline(time.Now().Add(rt.conf.Timeout))
+	if err != nil {
 		return
 	}
 
+	// send the final ADU+CRC on the wire
+	_, err	= rt.link.Write(adu)
+
 	// enforce inter-frame delays
-	if rt.conf.Speed >= 19200 {
+	if rt.conf.Speed == 0 || rt.conf.Speed >= 19200 {
 		// for baud rates equal to or greater than 19200 bauds, a fixed
 		// inter-frame delay of 1750 uS is specified.
 		time.Sleep(1750 * time.Microsecond)
@@ -93,7 +115,7 @@ func (rt *rtuTransport) WriteRequest(req *request) (err error) {
 	return
 }
 
-// Waits for, reads and decodes a response from the serial line.
+// Waits for, reads and decodes a response from the rtu link.
 func (rt *rtuTransport) ReadResponse() (res *response, err error) {
 	var rxbuf	[]byte
 	var byteCount	int
@@ -104,7 +126,7 @@ func (rt *rtuTransport) ReadResponse() (res *response, err error) {
 
 	// read the serial ADU header: unit id (1 byte), response code (1 byte) and
 	// PDU length/exception code (1 byte)
-	byteCount, err	= io.ReadFull(rt.port, rxbuf[0:3])
+	byteCount, err	= io.ReadFull(rt.link, rxbuf[0:3])
 	if err != nil && err != io.ErrUnexpectedEOF {
 		return
 	}
@@ -114,13 +136,13 @@ func (rt *rtuTransport) ReadResponse() (res *response, err error) {
 	}
 
 	// figure out how many further bytes to read
-	bytesNeeded, err	= expectedResponseLenth(uint8(rxbuf[1]), uint8(rxbuf[2]))
+	bytesNeeded, err = expectedResponseLenth(uint8(rxbuf[1]), uint8(rxbuf[2]))
 	if err != nil {
 		return
 	}
 
 	// we need to read 2 additional bytes of CRC after the payload
-	bytesNeeded		+= 2
+	bytesNeeded	+= 2
 
 	// never read more than the max allowed frame length
 	if byteCount + bytesNeeded > maxRTUFrameLength {
@@ -128,7 +150,7 @@ func (rt *rtuTransport) ReadResponse() (res *response, err error) {
 		return
 	}
 
-	byteCount, err		= io.ReadFull(rt.port, rxbuf[3:3 + bytesNeeded])
+	byteCount, err	= io.ReadFull(rt.link, rxbuf[3:3 + bytesNeeded])
 	if err != nil && err != io.ErrUnexpectedEOF {
 		return
 	}
@@ -175,6 +197,7 @@ func (rt *rtuTransport) assembleRTUFrame(req *request) (adu []byte) {
 	return
 }
 
+// Computes the expected length of a modbus RTU response.
 func expectedResponseLenth(responseCode uint8, responseLength uint8) (byteCount int, err error) {
 	switch responseCode {
 	case FC_READ_HOLDING_REGISTERS,
@@ -197,6 +220,75 @@ func expectedResponseLenth(responseCode uint8, responseLength uint8) (byteCount 
 	     FC_MASK_WRITE_REGISTER | 0x80:	byteCount = 0
 	default: err = fmt.Errorf("unexpected response code (%v)", responseCode)
 	}
+
+	return
+}
+
+// Discards the contents of the link's rx buffer, eating up to 1kB of data.
+// Note that on a serial line, this call may block for up to serialConf.Timeout
+// i.e. 10ms.
+func discard(link rtuLink) {
+	var rxbuf	= make([]byte, 1024)
+
+	link.SetDeadline(time.Now().Add(time.Millisecond))
+	link.Read(rxbuf)
+	return
+}
+
+// serialPortWrapper wraps a seria.Port (i.e. physical port) to
+// 1) satisfy the rtuLink interface and
+// 2) add Read() deadline/timeout support.
+type serialPortWrapper struct {
+	port		serial.Port
+	deadline	time.Time
+}
+
+// Closes the serial port.
+func (spw *serialPortWrapper) Close() (err error) {
+	err = spw.port.Close()
+
+	return
+}
+
+// Reads bytes from the underlying serial port.
+// If Read() is called after the deadline, a timeout error is returned without
+// attempting to read from the serial port.
+// If Read() is called before the deadline, a read attempt to the serial port
+// is made. At this point, one of two things can happen:
+// - the serial port's receive buffer has one or more bytes and port.Read()
+//   returns immediately (partial or full read),
+// - the serial port's receive buffer is empty: port.Read() blocks for
+//   up to 10ms and returns serial.ErrTimeout. The serial timeout error is
+//   masked and Read() returns with no data.
+// As the higher-level methods use io.ReadFull(), Read() will be called
+// as many times as necessary until either enough bytes have been read or an
+// error is returned (serial.ErrTimeout or any other i/o error).
+func (spw *serialPortWrapper) Read(rxbuf []byte) (cnt int, err error) {
+	// return a timeout if the deadline has passed
+	if time.Now().After(spw.deadline) {
+		err = serial.ErrTimeout
+		return
+	}
+
+	cnt, err = spw.port.Read(rxbuf)
+	// mask serial.ErrTimeout errors from the serial port
+	if err != nil && err == serial.ErrTimeout {
+		err = nil
+	}
+
+	return
+}
+
+// Sends the bytes over the wire.
+func (spw *serialPortWrapper) Write(txbuf []byte) (cnt int, err error) {
+	cnt, err = spw.port.Write(txbuf)
+
+	return
+}
+
+// Saves the i/o deadline (only used by Read).
+func (spw *serialPortWrapper) SetDeadline(deadline time.Time) (err error) {
+	spw.deadline = deadline
 
 	return
 }

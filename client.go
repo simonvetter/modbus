@@ -84,7 +84,17 @@ func NewClient(conf *ClientConfiguration) (mc *ModbusClient, err error) {
 		}
 
 		// create the RTU transport
-		mc.transport = newRTUTransport(&mc.conf)
+		mc.transport = newRTUTransport(&mc.conf, false)
+
+	case strings.HasPrefix(mc.conf.URL, "rtuovertcp://"):
+		mc.conf.URL	= strings.TrimPrefix(mc.conf.URL, "rtuovertcp://")
+
+		if mc.conf.Timeout == 0 {
+			mc.conf.Timeout = 1 * time.Second
+		}
+
+		// create the RTU over TCP transport
+		mc.transport = newRTUTransport(&mc.conf, true)
 
 	case strings.HasPrefix(mc.conf.URL, "tcp://"):
 		mc.conf.URL	= strings.TrimPrefix(mc.conf.URL, "tcp://")
