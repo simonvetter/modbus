@@ -5,15 +5,9 @@ import (
 	"errors"
 )
 
-type request struct {
+type pdu struct {
 	unitId		uint8
 	functionCode	uint8
-	payload		[]byte
-}
-
-type response struct {
-	unitId		uint8
-	responseCode	uint8
 	payload		[]byte
 }
 
@@ -64,7 +58,7 @@ var (
 	ErrGWPathUnavailable		error = errors.New("gateway path unavailable")
 	ErrGWTargetFailedToRespond	error = errors.New("gateway target device failed to respond")
 	ErrBadCRC			error = errors.New("bad crc")
-	ErrShortResponse		error = errors.New("short response")
+	ErrShortFrame			error = errors.New("short frame")
 	ErrProtocolError		error = errors.New("protocol error")
 	ErrBadUnitId			error = errors.New("bad unit id")
 	ErrBadTransactionId		error = errors.New("bad transaction id")

@@ -86,37 +86,69 @@ func (rt *rtuTransport) Close() (err error) {
 	return
 }
 
-// Serializes and writes a request out to the rtu link.
-func (rt *rtuTransport) WriteRequest(req *request) (err error) {
-	var adu		[]byte
-
-	// build an RTU ADU out of the request object
-	adu	= rt.assembleRTUFrame(req)
-
+// Runs a request across the rtu link and returns a response.
+func (rt *rtuTransport) ExecuteRequest(req *pdu) (res *pdu, err error) {
 	// set an i/o deadline on the link
 	err	= rt.link.SetDeadline(time.Now().Add(rt.conf.Timeout))
 	if err != nil {
 		return
 	}
 
+	// build an RTU ADU out of the request object and
 	// send the final ADU+CRC on the wire
-	_, err	= rt.link.Write(adu)
+	_, err	= rt.link.Write(rt.assembleRTUFrame(req))
+	if err != nil {
+		return
+	}
 
-	// enforce inter-frame delays
+	// observe inter-frame delays
+	time.Sleep(rt.interFrameDelay())
+
+	// read the response back from the wire
+	res, err = rt.readRTUFrame()
+
+	return
+}
+
+// Reads a request from the rtu link.
+func (rt *rtuTransport) ReadRequest() (req *pdu, err error) {
+	// reading requests from RTU links is currently unsupported
+	err	= fmt.Errorf("unimplemented")
+
+	return
+}
+
+// Writes a response to the rtu link.
+func (rt *rtuTransport) WriteResponse(res *pdu) (err error) {
+	// build an RTU ADU out of the request object and
+	// send the final ADU+CRC on the wire
+	_, err	= rt.link.Write(rt.assembleRTUFrame(res))
+	if err != nil {
+		return
+	}
+
+	// observe inter-frame delays
+	time.Sleep(rt.interFrameDelay())
+
+	return
+}
+
+// Returns the inter-frame gap duration.
+func (rt *rtuTransport) interFrameDelay() (delay time.Duration) {
 	if rt.conf.Speed == 0 || rt.conf.Speed >= 19200 {
 		// for baud rates equal to or greater than 19200 bauds, a fixed
 		// inter-frame delay of 1750 uS is specified.
-		time.Sleep(1750 * time.Microsecond)
+		delay = 1750 * time.Microsecond
 	} else {
 		// for lower baud rates, the inter-frame delay should be 3.5 character times
-		time.Sleep(time.Duration(38500000 / rt.conf.Speed) * time.Microsecond)
+		delay = time.Duration(38500000 / rt.conf.Speed) * time.Microsecond
 	}
 
 	return
 }
 
-// Waits for, reads and decodes a response from the rtu link.
-func (rt *rtuTransport) ReadResponse() (res *response, err error) {
+// Waits for, reads and decodes a frame from the rtu link.
+func (rt *rtuTransport) readRTUFrame() (res *pdu, err error) {
 	var rxbuf	[]byte
 	var byteCount	int
 	var bytesNeeded	int
@@ -131,7 +163,7 @@ func (rt *rtuTransport) ReadResponse() (res *response, err error) {
 		return
 	}
 	if byteCount != 3 {
-		err = ErrShortResponse
+		err = ErrShortFrame
 		return
 	}
 
@@ -156,7 +188,7 @@ func (rt *rtuTransport) ReadResponse() (res *response, err error) {
 	}
 	if byteCount != bytesNeeded {
 		rt.logger.Warningf("expected %v bytes, received %v", bytesNeeded, byteCount)
-		err = ErrShortResponse
+		err = ErrShortFrame
 		return
 	}
 
@@ -170,9 +202,9 @@ func (rt *rtuTransport) ReadResponse() (res *response, err error) {
 		return
 	}
 
-	res	= &response{
+	res	= &pdu{
 		unitId:		rxbuf[0],
-		responseCode:	rxbuf[1],
+		functionCode:	rxbuf[1],
 		// pass the byte count + trailing data as payload, withtout the CRC
 		payload:	rxbuf[2:3 + bytesNeeded  - 2],
 	}
@@ -180,12 +212,13 @@ func (rt *rtuTransport) ReadResponse() (res *response, err error) {
 	return
 }
 
-func (rt *rtuTransport) assembleRTUFrame(req *request) (adu []byte) {
+// Turns a PDU object into bytes.
+func (rt *rtuTransport) assembleRTUFrame(p *pdu) (adu []byte) {
 	var crc		crc
 
-	adu	= append(adu, req.unitId)
-	adu	= append(adu, req.functionCode)
-	adu	= append(adu, req.payload...)
+	adu	= append(adu, p.unitId)
+	adu	= append(adu, p.functionCode)
+	adu	= append(adu, p.payload...)
 
 	// run the ADU through the CRC generator
 	crc.init()

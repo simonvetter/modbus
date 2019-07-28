@@ -11,9 +11,9 @@ func TestAssembleRTUFrame(t *testing.T) {
 	var rt		*rtuTransport
 	var frame	[]byte
 
-	rt		= newRTUTransport(&ClientConfiguration{}, false)
+	rt		= &rtuTransport{}
 
-	frame		= rt.assembleRTUFrame(&request{
+	frame		= rt.assembleRTUFrame(&pdu{
 		unitId:		0x33,
 		functionCode:	0x11,
 		payload:	[]byte{0x22, 0x33, 0x44, 0x55},
@@ -34,7 +34,7 @@ func TestAssembleRTUFrame(t *testing.T) {
 		}
 	}
 
-	frame		= rt.assembleRTUFrame(&request{
+	frame		= rt.assembleRTUFrame(&pdu{
 		unitId:		0x31,
 		functionCode:	0x06,
 		payload:	[]byte{0x12, 0x34},
@@ -58,12 +58,12 @@ func TestAssembleRTUFrame(t *testing.T) {
 }
 
 
-func TestRTUTransportReadResponse(t *testing.T) {
+func TestRTUTransportReadRTUFrame(t *testing.T) {
 	var rt		*rtuTransport
 	var p1, p2	net.Conn
 	var txchan	chan []byte
 	var err		error
-	var res		*response
+	var res		*pdu
 
 	txchan		= make(chan []byte, 2)
 	p1, p2		= net.Pipe()
@@ -81,15 +81,15 @@ func TestRTUTransportReadResponse(t *testing.T) {
 		0x02,       // exception code
 		0xc1, 0x6e, // CRC
 	}
-	res, err	= rt.ReadResponse()
+	res, err	= rt.readRTUFrame()
 	if err != nil {
-		t.Errorf("ReadResponse() should have succeeded, got %v", err)
+		t.Errorf("readRTUFrame() should have succeeded, got %v", err)
 	}
 	if res.unitId != 0x31 {
 		t.Errorf("expected 0x31 as unit id, got 0x%02x", res.unitId)
 	}
-	if res.responseCode != 0x82 {
-		t.Errorf("expected 0x82 as function code, got 0x%02x", res.responseCode)
+	if res.functionCode != 0x82 {
+		t.Errorf("expected 0x82 as function code, got 0x%02x", res.functionCode)
 	}
 	if len(res.payload) != 1 {
 		t.Errorf("expected a length of 1, got %v", len(res.payload))
@@ -105,9 +105,9 @@ func TestRTUTransportReadResponse(t *testing.T) {
 		0x12,       // exception code
 		0xc0, 0xa2, // CRC
 	}
-	res, err	= rt.ReadResponse()
+	res, err	= rt.readRTUFrame()
 	if err != ErrBadCRC {
-		t.Errorf("ReadResponse() should have returned ErrBadCrc, got %v", err)
+		t.Errorf("readRTUFrame() should have returned ErrBadCrc, got %v", err)
 	}
 
 	// read a longer, valid response
@@ -118,15 +118,15 @@ func TestRTUTransportReadResponse(t *testing.T) {
 		0x33, 0x44, // register #2
 		0x7b, 0xc5, // CRC
 	}
-	res, err	= rt.ReadResponse()
+	res, err	= rt.readRTUFrame()
 	if err != nil {
-		t.Errorf("ReadResponse() should have succeeded, got %v", err)
+		t.Errorf("readRTUFrame() should have succeeded, got %v", err)
 	}
 	if res.unitId != 0x31 {
 		t.Errorf("expected 0x31 as unit id, got 0x%02x", res.unitId)
 	}
-	if res.responseCode != 0x03 {
-		t.Errorf("expected 0x03 as function code, got 0x%02x", res.responseCode)
+	if res.functionCode != 0x03 {
+		t.Errorf("expected 0x03 as function code, got 0x%02x", res.functionCode)
 	}
 	if len(res.payload) != 5 {
 		t.Errorf("expected a length of 5, got %v", len(res.payload))
