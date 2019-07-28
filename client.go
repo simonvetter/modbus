@@ -2,6 +2,7 @@ package modbus
 
 import (
 	"fmt"
+	"net"
 	"time"
 	"strings"
 	"sync"
@@ -25,7 +26,6 @@ const (
 	// word order of 32-bit registers
 	HIGH_WORD_FIRST		WordOrder	= 1
 	LOW_WORD_FIRST		WordOrder	= 2
-
 )
 
 type ClientConfiguration struct {
@@ -45,6 +45,7 @@ type ModbusClient struct {
 	wordOrder	WordOrder
 	transport	transport
 	unitId		uint8
+	transportType	transportType
 }
 
 func NewClient(conf *ClientConfiguration) (mc *ModbusClient, err error) {
@@ -83,8 +84,7 @@ func NewClient(conf *ClientConfiguration) (mc *ModbusClient, err error) {
 			mc.conf.Timeout = 300 * time.Millisecond
 		}
 
-		// create the RTU transport
-		mc.transport = newRTUTransport(&mc.conf, false)
+		mc.transportType	= RTU_TRANSPORT
 
 	case strings.HasPrefix(mc.conf.URL, "rtuovertcp://"):
 		mc.conf.URL	= strings.TrimPrefix(mc.conf.URL, "rtuovertcp://")
@@ -93,8 +93,7 @@ func NewClient(conf *ClientConfiguration) (mc *ModbusClient, err error) {
 			mc.conf.Timeout = 1 * time.Second
 		}
 
-		// create the RTU over TCP transport
-		mc.transport = newRTUTransport(&mc.conf, true)
+		mc.transportType	= RTU_OVER_TCP_TRANSPORT
 
 	case strings.HasPrefix(mc.conf.URL, "tcp://"):
 		mc.conf.URL	= strings.TrimPrefix(mc.conf.URL, "tcp://")
@@ -103,8 +102,7 @@ func NewClient(conf *ClientConfiguration) (mc *ModbusClient, err error) {
 			mc.conf.Timeout = 1 * time.Second
 		}
 
-		// create the TCP transport
-		mc.transport = newTCPTransport(&mc.conf)
+		mc.transportType	= TCP_TRANSPORT
 
 	default:
 		err	= ErrConfigurationError
@@ -121,10 +119,64 @@ func NewClient(conf *ClientConfiguration) (mc *ModbusClient, err error) {
 
 // Opens the underlying transport (tcp socket or serial line).
 func (mc *ModbusClient) Open() (err error) {
+	var spw		*serialPortWrapper
+	var sock	net.Conn
+
 	mc.lock.Lock()
 	defer mc.lock.Unlock()
 
-	err = mc.transport.Open()
+	switch mc.transportType {
+	case RTU_TRANSPORT:
+		// create a serial port wrapper object
+		spw = newSerialPortWrapper(&serialPortConfig{
+			Device:		mc.conf.URL,
+			Speed:		mc.conf.Speed,
+			DataBits:	mc.conf.DataBits,
+			Parity:		mc.conf.Parity,
+			StopBits:	mc.conf.StopBits,
+		})
+
+		// open the serial device
+		err = spw.Open()
+		if err != nil {
+			return
+		}
+
+		// discard potentially stale serial data
+		discard(spw)
+
+		// create the RTU transport
+		mc.transport = newRTUTransport(
+			spw, mc.conf.URL, mc.conf.Speed, mc.conf.Timeout)
+
+	case RTU_OVER_TCP_TRANSPORT:
+		// connect to the remote host
+		sock, err	= net.DialTimeout("tcp", mc.conf.URL, 5 * time.Second)
+		if err != nil {
+			return
+		}
+
+		// discard potentially stale serial data
+		discard(sock)
+
+		// create the RTU transport
+		mc.transport = newRTUTransport(
+			sock, mc.conf.URL, mc.conf.Speed, mc.conf.Timeout)
+
+	case TCP_TRANSPORT:
+		// connect to the remote host
+		sock, err	= net.DialTimeout("tcp", mc.conf.URL, 5 * time.Second)
+		if err != nil {
+			return
+		}
+
+		// create the TCP transport
+		mc.transport = newTCPTransport(sock, mc.conf.Timeout)
+
+	default:
+		// should never happen
+		err = ErrConfigurationError
+	}
 
 	return
 }

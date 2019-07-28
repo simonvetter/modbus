@@ -13,29 +13,18 @@ const (
 )
 
 type tcpTransport struct {
-	conf		*ClientConfiguration
 	logger		*logger
 	socket		net.Conn
+	timeout		time.Duration
 	lastTxnId	uint16
 }
 
 // Returns a new TCP transport.
-func newTCPTransport(conf *ClientConfiguration) (tt *tcpTransport) {
+func newTCPTransport(socket net.Conn, timeout time.Duration) (tt *tcpTransport) {
 	tt = &tcpTransport{
-		conf:	conf,
-		logger:	newLogger(fmt.Sprintf("tcp-transport(%s)", conf.URL)),
-	}
-
-	return
-}
-
-// Attempts to connect to the remote host.
-func (tt *tcpTransport) Open() (err error) {
-	var socket	net.Conn
-
-	socket, err	= net.DialTimeout("tcp", tt.conf.URL, 5 * time.Second)
-	if err == nil {
-		tt.socket = socket
+		socket:		socket,
+		timeout:	timeout,
+		logger:		newLogger(fmt.Sprintf("tcp-transport(%s)", socket.RemoteAddr())),
 	}
 
 	return
@@ -51,7 +40,7 @@ func (tt *tcpTransport) Close() (err error) {
 // Runs a request across the socket and returns a response.
 func (tt *tcpTransport) ExecuteRequest(req *pdu) (res *pdu, err error) {
 	// set an i/o deadline on the socket (read and write)
-	err	= tt.socket.SetDeadline(time.Now().Add(tt.conf.Timeout))
+	err	= tt.socket.SetDeadline(time.Now().Add(tt.timeout))
 	if err != nil {
 		return
 	}
@@ -74,7 +63,7 @@ func (tt *tcpTransport) ReadRequest() (req *pdu, err error) {
 	var txnId	uint16
 
 	// set an i/o deadline on the socket (read and write)
-	err	= tt.socket.SetDeadline(time.Now().Add(tt.conf.Timeout))
+	err	= tt.socket.SetDeadline(time.Now().Add(tt.timeout))
 	if err != nil {
 		return
 	}

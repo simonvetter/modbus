@@ -70,10 +70,7 @@ func TestRTUTransportReadRTUFrame(t *testing.T) {
 	go feedTestPipe(t, txchan, p1)
 
 
-	rt		= newRTUTransport(&ClientConfiguration{
-		Timeout: 10 * time.Millisecond,
-	}, false)
-	rt.link		= p2
+	rt		= newRTUTransport(p2, "", 9600, 10 * time.Millisecond)
 
 	// read a valid response (illegal data address)
 	txchan		<- []byte{
