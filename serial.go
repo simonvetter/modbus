@@ -46,7 +46,7 @@ func (spw *serialPortWrapper) Open() (err error) {
 		DataBits:	int(spw.conf.DataBits),
 		Parity:		parity,
 		StopBits:	int(spw.conf.StopBits),
-		Timeout:	10 * time.Millisecond,
+		Timeout:	1 * time.Millisecond,
 	})
 
 	return
@@ -73,12 +73,6 @@ func (spw *serialPortWrapper) Close() (err error) {
 // as many times as necessary until either enough bytes have been read or an
 // error is returned (serial.ErrTimeout or any other i/o error).
 func (spw *serialPortWrapper) Read(rxbuf []byte) (cnt int, err error) {
-	// return a timeout if the deadline has passed
-	if time.Now().After(spw.deadline) {
-		err = serial.ErrTimeout
-		return
-	}
-
 	cnt, err = spw.port.Read(rxbuf)
 	// mask serial.ErrTimeout errors from the serial port
 	if err != nil && err == serial.ErrTimeout {
