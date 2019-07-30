@@ -32,6 +32,16 @@ type ServerConfiguration struct {
 	// client connections (tcp+tls only). Leaf (i.e. client) certificates can
 	// also be used in case of self-signed certs, or if cert pinning is required.
 	TLSClientCAs  *x509.CertPool
+
+	// Speed sets the serial link speed (in bps, rtu only)
+	Speed         uint
+	// DataBits sets the number of bits per serial character (rtu only)
+	DataBits      uint
+	// Parity sets the serial link parity mode (rtu only)
+	Parity        uint
+	// StopBits sets the number of serial stop bits (rtu only)
+	StopBits      uint
+	AcceptedUnitIds	[]uint8
 }
 
 // Request object passed to the coil handler.
@@ -212,6 +222,37 @@ func NewServer(conf *ServerConfiguration, reqHandler RequestHandler) (
 
 		ms.transportType	= modbusTCPOverTLS
 
+	case "rtu":
+		if ms.conf.Speed == 0 {
+			ms.conf.Speed	= 9600
+		}
+
+		if ms.conf.DataBits == 0 {
+			ms.conf.DataBits = 8
+		}
+
+		if ms.conf.StopBits == 0 {
+			if ms.conf.Parity == PARITY_NONE {
+				ms.conf.StopBits = 2
+			} else {
+				ms.conf.StopBits = 1
+			}
+		}
+
+		if ms.conf.Timeout == 0 {
+			ms.conf.Timeout = 30 * time.Second
+		}
+
+		// ensure we have at least one configured unit ID to tune into
+		if len(ms.conf.AcceptedUnitIds) == 0 {
+			ms.logger.Errorf("at least 1 unit id must be configured " +
+			                 "with the RTU transport")
+			err = ErrConfigurationError
+			return
+		}
+
+		ms.transportType	= modbusRTU
+
 	default:
 		err	= ErrConfigurationError
 		return
@@ -222,6 +263,8 @@ func NewServer(conf *ServerConfiguration, reqHandler RequestHandler) (
 
 // Starts accepting client connections.
 func (ms *ModbusServer) Start() (err error) {
+	var spw		*serialPortWrapper
+
 	ms.lock.Lock()
 	defer ms.lock.Unlock()
 
@@ -240,6 +283,31 @@ func (ms *ModbusServer) Start() (err error) {
 		// accept client connections in a goroutine
 		go ms.acceptTCPClients()
 
+	case modbusRTU:
+		// create a serial port wrapper object
+		spw = newSerialPortWrapper(&serialPortConfig{
+			Device:		ms.conf.URL,
+			Speed:		ms.conf.Speed,
+			DataBits:	ms.conf.DataBits,
+			Parity:		ms.conf.Parity,
+			StopBits:	ms.conf.StopBits,
+		})
+
+		// open the serial device
+		err = spw.Open()
+		if err != nil {
+			return
+		}
+
+		// discard potentially stale serial data
+		discard(spw)
+
+		// create the RTU transport and pass it to the handler goroutine
+		go ms.handleTransport(
+			newRTUTransport(
+				spw, ms.conf.URL, ms.conf.Speed, ms.conf.Timeout),
+			ms.conf.URL, "")
+
 	default:
 		err = ErrConfigurationError
 		return
@@ -255,15 +323,11 @@ func (ms *ModbusServer) Stop() (err error) {
 	ms.lock.Lock()
 	defer ms.lock.Unlock()
 
-	if !ms.started {
-		return
-	}
-
 	ms.started = false
 
 	if ms.transportType == modbusTCP || ms.transportType == modbusTCPOverTLS {
 		// close the server socket if we're listening over TCP
-		err	= ms.tcpListener.Close()
+		ms.tcpListener.Close()
 
 		// close all active TCP clients
 		for _, sock := range ms.tcpClients{
@@ -376,13 +440,41 @@ func (ms *ModbusServer) handleTransport(t transport, clientAddr string, clientRo
 	var req		*pdu
 	var res		*pdu
 	var err		error
+	var found	bool
 	var addr	uint16
 	var quantity	uint16
 
 	for {
 		req, err = t.ReadRequest()
 		if err != nil {
-			return
+			// on RTU links, skip the frame. On TCP links, return to close the
+			// connection.
+			if ms.transportType == modbusRTU {
+				continue
+			} else {
+				return
+			}
+		}
+
+		// only accept unit IDs of interest on shared RTU links.
+		// on TCP links, the endpoint is clearly identified by its IP address and
+		// port, so passing all requests regardless of their unit ID to the handler
+		// is appropriate.
+		if ms.transportType == modbusRTU {
+			found = false
+
+			// loop through the accepted unit ID list
+			for _, uid := range ms.conf.AcceptedUnitIds {
+				if uid == req.unitId {
+					found = true
+					break
+				}
+			}
+
+			// if we found no match, stay silent as this request wasn't for us
+			if !found {
+				continue
+			}
 		}
 
 		switch req.functionCode {

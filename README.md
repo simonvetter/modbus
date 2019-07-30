@@ -16,7 +16,8 @@ The client supports the following modes:
 
 The server supports:
 - modbus TCP (a.k.a. MBAP),
-- modbus TCP over TLS (a.k.a. MBAPS or Modbus Security).
+- modbus TCP over TLS (a.k.a. MBAPS or Modbus Security),
+- modbus RTU.
 
 A CLI client is available in cmd/modbus-cli.go and can be built with
 ```bash
@@ -159,7 +160,6 @@ Byte encoding/endianness/word ordering:
   integers and floating point numbers.
 
 ### TODO (in no particular order)
-* Add RTU (serial) support to the server
 * Add more tests
 * Add diagnostics register support
 * Add fifo register support
