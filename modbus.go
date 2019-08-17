@@ -83,3 +83,22 @@ func mapExceptionCodeToError(exceptionCode uint8) (err error) {
 
 	return
 }
+
+func mapErrorToExceptionCode(err error) (exceptionCode uint8) {
+	switch err {
+	case ErrIllegalFunction:	exceptionCode = EX_ILLEGAL_FUNCTION
+	case ErrIllegalDataAddress:	exceptionCode = EX_ILLEGAL_DATA_ADDRESS
+	case ErrIllegalDataValue:	exceptionCode = EX_ILLEGAL_DATA_VALUE
+	case ErrServerDeviceFailure:    exceptionCode = EX_SERVER_DEVICE_FAILURE
+	case ErrAcknowledge:		exceptionCode = EX_ACKNOWLEDGE
+	case ErrMemoryParityError:      exceptionCode = EX_MEMORY_PARITY_ERROR
+	case ErrServerDeviceBusy:	exceptionCode = EX_SERVER_DEVICE_BUSY
+	case ErrGWPathUnavailable:	exceptionCode = EX_GW_PATH_UNAVAILABLE
+	case ErrGWTargetFailedToRespond:
+		exceptionCode = EX_GW_TARGET_FAILED_TO_RESPOND
+	default:
+		exceptionCode = EX_SERVER_DEVICE_FAILURE
+	}
+
+	return
+}

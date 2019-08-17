@@ -1,13 +1,16 @@
-## Go modbus client library
+## Go modbus stack
 
 ### Description
 This package is a go implementation of the modbus protocol.
 It aims to provide a simple-to-use, high-level API to interact with modbus
 devices using native Go types.
 
-So far, only the client part is implemented, using either TCP or RTU (serial)
-as transports. RTU over TCP is also supported to allow the use of
-remote serial ports or cheap TCP to serial bridges.
+Both client and server components are available.
+The client can be used over both TCP and RTU (serial), and supports an
+RTU over TCP mode to allow the use of remote serial ports or cheap TCP to
+serial bridges.
+
+The server is TCP-only for now.
 
 A CLI client is available in cmd/modbus-cli.go and can be built with
 ```bash
@@ -16,10 +19,11 @@ $ ./modbus-cli --help
 ```
 
 ### Getting started
-
 ```bash
 $ go get github.com/simonvetter/modbus
 ```
+
+### Using the client
 
 ```golang
 import (
@@ -100,6 +104,9 @@ func main() {
     client.Close()
 }
 ```
+### Using the server component
+See [examples/tcp_server.go](examples/tcp_server.go) for an example.
+
 ### Supported function codes, golang object types and endianness/word ordering
 Function codes:
 * Read coils (0x01)
@@ -123,8 +130,8 @@ Byte encoding/endianness/word ordering:
   floating point numbers.
 
 ### TODO (in no particular order)
-* Add integration tests
-* Add a server object
+* Add RTU (serial) support to the server
+* Add more tests
 * Add diagnostics register support
 * Add fifo register support
 * Add file register support
