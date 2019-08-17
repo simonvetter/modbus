@@ -137,7 +137,7 @@ func main() {
 			}
 
 			if splitArgs[0] == "rh" || splitArgs[0] == "readHoldingRegister" ||
-			   splitArgs[0] == "readHoldingRegister" {
+			   splitArgs[0] == "readHoldingRegisters" {
 				   o.isHoldingReg	= true
 			}
 
@@ -463,7 +463,7 @@ func main() {
 			err	= client.WriteUint32(o.addr, o.u32)
 			if err != nil {
 				fmt.Printf("failed to write %v at address 0x%04x: %v\n",
-					   o.u32, o.addr)
+					   o.u32, o.addr, err)
 			} else {
 				fmt.Printf("wrote %v at address 0x%04x\n",
 					   o.u32, o.addr)
@@ -473,7 +473,7 @@ func main() {
 			err	= client.WriteUint32(o.addr, o.u32)
 			if err != nil {
 				fmt.Printf("failed to write %v at address 0x%04x: %v\n",
-					   int32(o.u32), o.addr)
+					   int32(o.u32), o.addr, err)
 			} else {
 				fmt.Printf("wrote %v at address 0x%04x\n",
 					   int32(o.u32), o.addr)
@@ -483,7 +483,7 @@ func main() {
 			err	= client.WriteFloat32(o.addr, o.f32)
 			if err != nil {
 				fmt.Printf("failed to write %f at address 0x%04x: %v\n",
-					   o.f32, o.addr)
+					   o.f32, o.addr, err)
 			} else {
 				fmt.Printf("wrote %f at address 0x%04x\n",
 					   o.f32, o.addr)
