@@ -339,6 +339,11 @@ func (mc *ModbusClient) WriteCoil(addr uint16, value bool) (err error) {
 		   }
 
 	case res.responseCode == (req.functionCode | 0x80):
+		if len(res.payload) != 1 {
+			err	= ErrProtocolError
+			return
+		}
+
 		err	= mapExceptionCodeToError(res.payload[0])
 
 	default:
@@ -415,6 +420,11 @@ func (mc *ModbusClient) WriteCoils(addr uint16, values []bool) (err error) {
 		   }
 
 	case res.responseCode == (req.functionCode | 0x80):
+		if len(res.payload) != 1 {
+			err	= ErrProtocolError
+			return
+		}
+
 		err	= mapExceptionCodeToError(res.payload[0])
 
 	default:
@@ -464,6 +474,11 @@ func (mc *ModbusClient) WriteRegister(addr uint16, value uint16) (err error) {
 		   }
 
 	case res.responseCode == (req.functionCode | 0x80):
+		if len(res.payload) != 1 {
+			err	= ErrProtocolError
+			return
+		}
+
 		err	= mapExceptionCodeToError(res.payload[0])
 
 	default:
@@ -607,6 +622,11 @@ func (mc *ModbusClient) readBools(addr uint16, quantity uint16, di bool) (values
 
 
 	case res.responseCode == (req.functionCode | 0x80):
+		if len(res.payload) != 1 {
+			err	= ErrProtocolError
+			return
+		}
+
 		err	= mapExceptionCodeToError(res.payload[0])
 
 	default:
@@ -688,6 +708,11 @@ func (mc *ModbusClient) readRegisters(addr uint16, quantity uint16, regType RegT
 		bytes	= res.payload[1:]
 
 	case res.responseCode == (req.functionCode | 0x80):
+		if len(res.payload) != 1 {
+			err	= ErrProtocolError
+			return
+		}
+
 		err	= mapExceptionCodeToError(res.payload[0])
 
 	default:
@@ -765,6 +790,11 @@ func (mc *ModbusClient) writeRegisters(addr uint16, values []byte) (err error) {
 		   }
 
 	case res.responseCode == (req.functionCode | 0x80):
+		if len(res.payload) != 1 {
+			err	= ErrProtocolError
+			return
+		}
+
 		err	= mapExceptionCodeToError(res.payload[0])
 
 	default:
