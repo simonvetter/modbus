@@ -313,6 +313,233 @@ func TestBytesToFloat32s(t *testing.T) {
 	return
 }
 
+func TestUint64ToBytes(t *testing.T) {
+	var out []byte
+
+	out = uint64ToBytes(BIG_ENDIAN, HIGH_WORD_FIRST, 0x0fedcba987654321)
+	if len(out) != 8 {
+		t.Errorf("expected 8 bytes, got %v", len(out))
+	}
+
+	if out[0] != 0x0f || out[1] != 0xed || //  1st word
+		out[2] != 0xcb || out[3] != 0xa9 || // 2nd word
+		out[4] != 0x87 || out[5] != 0x65 || // 3rd word
+		out[6] != 0x43 || out[7] != 0x21 {  // 4th word
+		t.Errorf("expected {0x0f, 0xed, 0xcb, 0xa9, 0x87, 0x65, 0x43, 0x21}, got {0x%02x, 0x%02x, 0x%02x, 0x%02x, 0x%02x, 0x%02x, 0x%02x, 0x%02x}",
+			out[0], out[1], out[2], out[3], out[4], out[5], out[6], out[7])
+	}
+
+	out = uint64ToBytes(BIG_ENDIAN, LOW_WORD_FIRST, 0x0fedcba987654321)
+	if len(out) != 8 {
+		t.Errorf("expected 8 bytes, got %v", len(out))
+	}
+	if out[0] != 0x43 || out[1] != 0x21 || //  1st word
+		out[2] != 0x87 || out[3] != 0x65 || // 2nd word
+		out[4] != 0xcb || out[5] != 0xa9 || // 3rd word
+		out[6] != 0x0f || out[7] != 0xed {  // 4th word
+		t.Errorf("expected {0x43, 0x21, 0x87, 0x65, 0xcb, 0xa9, 0x0f, 0xed}, got {0x%02x, 0x%02x, 0x%02x, 0x%02x, 0x%02x, 0x%02x, 0x%02x, 0x%02x}",
+			out[0], out[1], out[2], out[3], out[4], out[5], out[6], out[7])
+	}
+
+	out = uint64ToBytes(LITTLE_ENDIAN, LOW_WORD_FIRST, 0x0fedcba987654321)
+	if len(out) != 8 {
+		t.Errorf("expected 8 bytes, got %v", len(out))
+	}
+	if out[0] != 0x21 || out[1] != 0x43 || //  1st word
+		out[2] != 0x65 || out[3] != 0x87 || // 2nd word
+		out[4] != 0xa9 || out[5] != 0xcb || // 3rd word
+		out[6] != 0xed || out[7] != 0x0f {  // 4th word
+		t.Errorf("expected {0x21, 0x43, 0x65, 0x87, 0xa9, 0xcb, 0xed, 0x0f}, got {0x%02x, 0x%02x, 0x%02x, 0x%02x, 0x%02x, 0x%02x, 0x%02x, 0x%02x}",
+			out[0], out[1], out[2], out[3], out[4], out[5], out[6], out[7])
+	}
+
+	out = uint64ToBytes(LITTLE_ENDIAN, HIGH_WORD_FIRST, 0x0fedcba987654321)
+	if len(out) != 8 {
+		t.Errorf("expected 8 bytes, got %v", len(out))
+	}
+	if out[0] != 0xed || out[1] != 0x0f ||  //  1st word
+		out[2] != 0xa9 || out[3] != 0xcb || // 2nd word
+		out[4] != 0x65 || out[5] != 0x87 || // 3rd word
+		out[6] != 0x21 || out[7] != 0x43 {  // 4th word
+		t.Errorf("expected {0xed, 0x0f, 0xa9, 0xcb, 0x65, 0x87, 0x21, 0x43}, got {0x%02x, 0x%02x, 0x%02x, 0x%02x, 0x%02x, 0x%02x, 0x%02x, 0x%02x}",
+			out[0], out[1], out[2], out[3], out[4], out[5], out[6], out[7])
+	}
+
+	return
+}
+
+func TestBytesToUint64s(t *testing.T) {
+	var results []uint64
+
+	results	= bytesToUint64s(BIG_ENDIAN, HIGH_WORD_FIRST, []byte{
+
+		0x0f, 0xed, 0xcb, 0xa9, 0x87, 0x65, 0x43, 0x21,
+		0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77,
+	})
+	if len(results) != 2 {
+		t.Errorf("expected 2 values, got %v", len(results))
+	}
+	if results[0] != 0x0fedcba987654321 {
+		t.Errorf("expected 0x0fedcba987654321, got 0x%16x", results[0])
+	}
+	if results[1] != 0x0011223344556677 {
+		t.Errorf("expected 0x0011223344556677, got 0x%16x", results[1])
+	}
+
+	results	= bytesToUint64s(BIG_ENDIAN, LOW_WORD_FIRST, []byte{
+		0x0f, 0xed, 0xcb, 0xa9, 0x87, 0x65, 0x43, 0x21,
+		0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77,
+	})
+	if len(results) != 2 {
+		t.Errorf("expected 2 values, got %v", len(results))
+	}
+
+	if results[0] != 0x43218765cba90fed {
+		t.Errorf("expected 0x43218765cba90fed, got 0x%16x", results[0])
+	}
+
+	if results[1] != 0x6677445522330011 {
+		t.Errorf("expected 0x6677445522330011, got 0x%16x", results[1])
+	}
+
+	results	= bytesToUint64s(LITTLE_ENDIAN, LOW_WORD_FIRST, []byte{
+		0x0f, 0xed, 0xcb, 0xa9, 0x87, 0x65, 0x43, 0x21,
+		0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77,
+	})
+	if len(results) != 2 {
+		t.Errorf("expected 2 values, got %v", len(results))
+	}
+	if results[0] != 0x21436587a9cbed0f {
+		t.Errorf("expected 0x21436587a9cbed0f, got 0x%16x", results[0])
+	}
+	if results[1] != 0x7766554433221100 {
+		t.Errorf("expected 0x7766554433221100, got 0x%16x", results[1])
+	}
+
+	results	= bytesToUint64s(LITTLE_ENDIAN, HIGH_WORD_FIRST, []byte{
+		0x0f, 0xed, 0xcb, 0xa9, 0x87, 0x65, 0x43, 0x21,
+		0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77,
+	})
+	if len(results) != 2 {
+		t.Errorf("expected 2 values, got %v", len(results))
+	}
+	if results[0] !=0xed0fa9cb65872143 {
+		t.Errorf("expected 0xed0fa9cb65872143, got 0x%16x", results[0])
+	}
+	if results[1] != 0x1100332255447766 {
+		t.Errorf("expected 0x1100332255447766, got 0x%16x", results[1])
+	}
+
+	return
+}
+
+func TestFloat64ToBytes(t *testing.T) {
+	var out	[]byte
+
+	out = float64ToBytes(BIG_ENDIAN, HIGH_WORD_FIRST, 1.2345678)
+	if len(out) != 8 {
+		t.Errorf("expected 8 bytes, got %v", len(out))
+	}
+	if out[0] != 0x3f || out[1] != 0xf3 || out[2] != 0xc0 || out[3] != 0xca ||
+    	out[4] != 0x2a || out[5] != 0x5b || out[6] != 0x1d || out[7] != 0x5d	{
+		t.Errorf("expected {0x3f, 0xf3, 0xc0, 0xca, 0x2a, 0x5b, 0x1d, 0x5d}, got {0x%02x, 0x%02x, 0x%02x, 0x%02x, 0x%02x, 0x%02x, 0x%02x, 0x%02x}",
+			out[0], out[1], out[2], out[3], out[4], out[5], out[6], out[7])
+	}
+
+	out = float64ToBytes(BIG_ENDIAN, LOW_WORD_FIRST, 1.2345678)
+	if len(out) != 8 {
+		t.Errorf("expected 8 bytes, got %v", len(out))
+	}
+	if out[0] != 0x1d || out[1] != 0x5d || out[2] != 0x2a || out[3] != 0x5b || out[4] != 0xc0 || out[5] != 0xca || out[6] != 0x3f || out[7] != 0xf3 {
+		t.Errorf("expected {0x1d, 0x5d, 0x2a, 0x5b, 0xc0, 0xca, 0x3f, 0xf3}, got {0x%02x, 0x%02x, 0x%02x, 0x%02x, 0x%02x, 0x%02x, 0x%02x, 0x%02x}",
+			out[0], out[1], out[2], out[3], out[4], out[5], out[6], out[7])
+	}
+
+	out = float64ToBytes(LITTLE_ENDIAN, LOW_WORD_FIRST, 1.2345678)
+	if len(out) != 8 {
+		t.Errorf("expected 8 bytes, got %v", len(out))
+	}
+
+	if out[0] != 0x5d || out[1] != 0x1d || out[2] != 0x5b || out[3] != 0x2a ||
+		out[4] != 0xca || out[5] != 0xc0 || out[6] != 0xf3 || out[7] != 0x3f {
+		t.Errorf("expected {0x5d, 0x1d, 0x5b, 0x2a, 0xca, 0xc0, 0xf3, 0x3f}, got {0x%02x, 0x%02x, 0x%02x, 0x%02x, 0x%02x, 0x%02x, 0x%02x, 0x%02x}",
+			out[0], out[1], out[2], out[3], out[4], out[5], out[6], out[7])
+	}
+
+	out = float64ToBytes(LITTLE_ENDIAN, HIGH_WORD_FIRST, 1.2345678)
+	if len(out) != 8 {
+		t.Errorf("expected 8 bytes, got %v", len(out))
+	}
+	if out[0] != 0xf3 || out[1] != 0x3f || out[2] != 0xca || out[3] != 0xc0 || out[4] != 0x5b || out[5] != 0x2a || out[6] != 0x5d || out[7] != 0x1d	{
+		t.Errorf("expected {0xf3, 0x3f, 0xca, 0xc0, 0x5b, 0x2a, 0x5d, 0x1d}, got {0x%02x, 0x%02x, 0x%02x, 0x%02x, 0x%02x, 0x%02x, 0x%02x, 0x%02x}",
+			out[0], out[1], out[2], out[3], out[4], out[5], out[6], out[7])
+	}
+
+	return
+}
+
+func TestBytesToFloat64s(t *testing.T) {
+	var results []float64
+
+	results	= bytesToFloat64s(BIG_ENDIAN, HIGH_WORD_FIRST, []byte{
+		0x3f, 0xf3, 0xc0, 0xca, 0x2a, 0x5b, 0x1d, 0x5d,
+		0x40, 0x09, 0x21, 0xfb, 0x5f, 0xff, 0xe9, 0x5e,
+	})
+	if len(results) != 2 {
+		t.Errorf("expected 2 values, got %v", len(results))
+	}
+	if results[0] != 1.2345678 {
+		t.Errorf("expected 1.2345678, got %.08f", results[0])
+	}
+	if results[1] != 3.14159274101 {
+		t.Errorf("expected 3.14159274101, got %.09f", results[1])
+	}
+
+	results	= bytesToFloat64s(BIG_ENDIAN, LOW_WORD_FIRST, []byte{
+		0x1d, 0x5d, 0x2a, 0x5b, 0xc0, 0xca, 0x3f, 0xf3,
+		0xe9, 0x5e, 0x5f, 0xff, 0x21, 0xfb, 0x40, 0x09,
+	})
+	if len(results) != 2 {
+		t.Errorf("expected 2 values, got %v", len(results))
+	}
+	if results[0] != 1.2345678 {
+		t.Errorf("expected 1.234, got %.08f", results[0])
+	}
+	if results[1] != 3.14159274101 {
+		t.Errorf("expected 3.14159274101, got %.09f", results[1])
+	}
+
+	results	= bytesToFloat64s(LITTLE_ENDIAN, LOW_WORD_FIRST, []byte{
+		0x5d, 0x1d, 0x5b, 0x2a, 0xca, 0xc0, 0xf3, 0x3f,
+		0x5e, 0xe9, 0xff, 0x5f, 0xfb, 0x21, 0x09, 0x40,
+	})
+	if len(results) != 2 {
+		t.Errorf("expected 2 values, got %v", len(results))
+	}
+	if results[0] != 1.2345678 {
+		t.Errorf("expected 1.234, got %.08f", results[0])
+	}
+	if results[1] != 3.14159274101 {
+		t.Errorf("expected 3.14159274101, got %.09f", results[1])
+	}
+
+	results	= bytesToFloat64s(LITTLE_ENDIAN, HIGH_WORD_FIRST, []byte{
+		0xf3, 0x3f, 0xca, 0xc0, 0x5b, 0x2a, 0x5d, 0x1d,
+		0x09, 0x40, 0xfb, 0x21, 0xff, 0x5f, 0x5e, 0xe9,
+	})
+	if len(results) != 2 {
+		t.Errorf("expected 2 values, got %v", len(results))
+	}
+	if results[0] != 1.2345678 {
+		t.Errorf("expected 1.234, got %.08f", results[0])
+	}
+	if results[1] != 3.14159274101 {
+		t.Errorf("expected 3.14159274101, got %.09f", results[1])
+	}
+
+	return
+}
+
 func TestDecodeBools(t *testing.T) {
 	var results	[]bool
 
