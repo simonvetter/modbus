@@ -76,6 +76,10 @@ func main() {
     var reg32s  []uint32
     reg32s, err = client.ReadUint32s(100, 2, modbus.INPUT_REGISTER)
 
+    // read the same 4 consecutive 16-bit registers as a single 64-bit register
+    var reg64	uint64
+    reg64, err	= client.ReadUint64(100, modbus.INPUT_REGISTER)
+
     // by default, 16-bit registers are decoded as big-endian and 32-bit registers
     // as big-endian with the high word first.
     // change the byte/word ordering of subsequent requests to little endian, with
@@ -123,11 +127,13 @@ Go object types:
 * Signed/Unisgned 16-bit integers (input and holding registers)
 * Signed/Unsigned 32-bit integers (input and holding registers)
 * 32-bit floating point numbers (input and holding registers)
+* Signed/Unsigned 64-bit integers (input and holding registers)
+* 64-bit floating point numbers (input and holding registers)
 
 Byte encoding/endianness/word ordering:
 * Little and Big endian for 16-bit integers
-* Little and Big endian, with and without word swap for 32-bit integers and 32-bit
-  floating point numbers.
+* Little and Big endian, with and without word swap for 32 and 64-bit
+  integers and floating point numbers.
 
 ### TODO (in no particular order)
 * Add RTU (serial) support to the server

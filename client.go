@@ -346,6 +346,62 @@ func (mc *ModbusClient) ReadFloat32(addr uint16, regType RegType) (value float32
 	return
 }
 
+// Reads multiple 64-bit registers.
+func (mc *ModbusClient) ReadUint64s(addr uint16, quantity uint16, regType RegType) (values []uint64, err error) {
+	var mbPayload	[]byte
+
+	// read 4 * quantity uint16 registers, as bytes
+	mbPayload, err	= mc.readRegisters(addr, quantity * 4, regType)
+	if err != nil {
+		return
+	}
+
+	// decode payload bytes as uint64s
+	values	= bytesToUint64s(mc.endianness, mc.wordOrder, mbPayload)
+
+	return
+}
+
+// Reads a single 64-bit register.
+func (mc *ModbusClient) ReadUint64(addr uint16, regType RegType) (value uint64, err error) {
+	var values	[]uint64
+
+	values, err	= mc.ReadUint64s(addr, 1, regType)
+	if err == nil {
+		value	= values[0]
+	}
+
+	return
+}
+
+// Reads multiple 64-bit float registers.
+func (mc *ModbusClient) ReadFloat64s(addr uint16, quantity uint16, regType RegType) (values []float64, err error) {
+	var mbPayload	[]byte
+
+	// read 4 * quantity uint16 registers, as bytes
+	mbPayload, err	= mc.readRegisters(addr, quantity * 4, regType)
+	if err != nil {
+		return
+	}
+
+	// decode payload bytes as float64s
+	values	= bytesToFloat64s(mc.endianness, mc.wordOrder, mbPayload)
+
+	return
+}
+
+// Reads a single 64-bit float register.
+func (mc *ModbusClient) ReadFloat64(addr uint16, regType RegType) (value float64, err error) {
+	var values	[]float64
+
+	values, err	= mc.ReadFloat64s(addr, 1, regType)
+	if err == nil {
+		value	= values[0]
+	}
+
+	return
+}
+
 // Writes a single coil (function code 05)
 func (mc *ModbusClient) WriteCoil(addr uint16, value bool) (err error) {
 	var req		*pdu
@@ -593,6 +649,48 @@ func (mc *ModbusClient) WriteFloat32s(addr uint16, values []float32) (err error)
 // Writes a single 32-bit float register.
 func (mc *ModbusClient) WriteFloat32(addr uint16, value float32) (err error) {
 	err = mc.writeRegisters(addr, float32ToBytes(mc.endianness, mc.wordOrder, value))
+
+	return
+}
+
+// Writes multiple 64-bit registers.
+func (mc *ModbusClient) WriteUint64s(addr uint16, values []uint64) (err error) {
+	var payload	[]byte
+
+	// turn registers to bytes
+	for _, value := range values {
+		payload	= append(payload, uint64ToBytes(mc.endianness, mc.wordOrder, value)...)
+	}
+
+	err = mc.writeRegisters(addr, payload)
+
+	return
+}
+
+// Writes a single 64-bit register.
+func (mc *ModbusClient) WriteUint64(addr uint16, value uint64) (err error) {
+	err = mc.writeRegisters(addr, uint64ToBytes(mc.endianness, mc.wordOrder, value))
+
+	return
+}
+
+// Writes multiple 64-bit float registers.
+func (mc *ModbusClient) WriteFloat64s(addr uint16, values []float64) (err error) {
+	var payload	[]byte
+
+	// turn registers to bytes
+	for _, value := range values {
+		payload	= append(payload, float64ToBytes(mc.endianness, mc.wordOrder, value)...)
+	}
+
+	err = mc.writeRegisters(addr, payload)
+
+	return
+}
+
+// Writes a single 64-bit float register.
+func (mc *ModbusClient) WriteFloat64(addr uint16, value float64) (err error) {
+	err = mc.writeRegisters(addr, float64ToBytes(mc.endianness, mc.wordOrder, value))
 
 	return
 }
