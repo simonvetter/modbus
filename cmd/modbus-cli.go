@@ -147,8 +147,12 @@ func main() {
 			case "uint32":	o.op	= readUint32
 			case "int32":	o.op	= readInt32
 			case "float32":	o.op	= readFloat32
+			case "uint64":	o.op	= readUint64
+			case "int64":	o.op	= readInt64
+			case "float64":	o.op	= readFloat64
 			default:
-				fmt.Printf("unknown register type '%v' (should be one of [u]unt16, [u]int32, float32)\n",
+				fmt.Printf("unknown register type '%v' (should be one of " +
+					   "[u]unt16, [u]int32, [u]int64, float32, float64)\n",
 					   splitArgs[1])
 				os.Exit(2)
 			}
@@ -216,8 +220,21 @@ func main() {
 				o.op		= writeFloat32
 				o.f32, err	= parseFloat32(splitArgs[3])
 
+			case "uint64":
+				o.op		= writeUint64
+				o.u64, err	= parseUint64(splitArgs[3])
+
+			case "int64":
+				o.op		= writeInt64
+				o.u64, err	= parseInt64(splitArgs[3])
+
+			case "float64":
+				o.op		= writeFloat64
+				o.f64, err	= parseFloat64(splitArgs[3])
+
 			default:
-				fmt.Printf("unknown register type '%v' (should be one of [u]unt16, [u]int32, float32)\n",
+				fmt.Printf("unknown register type '%v' (should be one of " +
+					   "[u]unt16, [u]int32, [u]int64, float32, float64)\n",
 					   splitArgs[1])
 				os.Exit(2)
 			}
@@ -429,6 +446,51 @@ func main() {
 				}
 			}
 
+		case readUint64, readInt64:
+			var res	[]uint64
+
+			if o.isHoldingReg {
+				res, err = client.ReadUint64s(o.addr, o.quantity + 1, modbus.HOLDING_REGISTER)
+			} else {
+				res, err = client.ReadUint64s(o.addr, o.quantity + 1, modbus.INPUT_REGISTER)
+			}
+			if err != nil {
+				fmt.Printf("failed to read holding/input registers: %v\n", err)
+			} else {
+				for idx := range res {
+					if o.op == readUint64 {
+						fmt.Printf("0x%04x\t%-5v : 0x%016x\t%v\n",
+							   o.addr + (uint16(idx) * 4),
+							   o.addr + (uint16(idx) * 4),
+							   res[idx], res[idx])
+					} else {
+						fmt.Printf("0x%04x\t%-5v : 0x%016x\t%v\n",
+							   o.addr + (uint16(idx) * 4),
+							   o.addr + (uint16(idx) * 4),
+							   res[idx], int64(res[idx]))
+					}
+				}
+			}
+
+		case readFloat64:
+			var res	[]float64
+
+			if o.isHoldingReg {
+				res, err = client.ReadFloat64s(o.addr, o.quantity + 1, modbus.HOLDING_REGISTER)
+			} else {
+				res, err = client.ReadFloat64s(o.addr, o.quantity + 1, modbus.INPUT_REGISTER)
+			}
+			if err != nil {
+				fmt.Printf("failed to read holding/input registers: %v\n", err)
+			} else {
+				for idx := range res {
+					fmt.Printf("0x%04x\t%-5v : %f\n",
+						   o.addr + (uint16(idx) * 4),
+						   o.addr + (uint16(idx) * 4),
+						   res[idx])
+				}
+			}
+
 		case writeCoil:
 			err	= client.WriteCoil(o.addr, o.coil)
 			if err != nil {
@@ -489,6 +551,36 @@ func main() {
 					   o.f32, o.addr)
 			}
 
+		case writeUint64:
+			err	= client.WriteUint64(o.addr, o.u64)
+			if err != nil {
+				fmt.Printf("failed to write %v at address 0x%04x: %v\n",
+					   o.u64, o.addr, err)
+			} else {
+				fmt.Printf("wrote %v at address 0x%04x\n",
+					   o.u64, o.addr)
+			}
+
+		case writeInt64:
+			err	= client.WriteUint64(o.addr, o.u64)
+			if err != nil {
+				fmt.Printf("failed to write %v at address 0x%04x: %v\n",
+					   int64(o.u64), o.addr, err)
+			} else {
+				fmt.Printf("wrote %v at address 0x%04x\n",
+					   int64(o.u64), o.addr)
+			}
+
+		case writeFloat64:
+			err	= client.WriteFloat64(o.addr, o.f64)
+			if err != nil {
+				fmt.Printf("failed to write %f at address 0x%04x: %v\n",
+					   o.f64, o.addr, err)
+			} else {
+				fmt.Printf("wrote %f at address 0x%04x\n",
+					   o.f64, o.addr)
+			}
+
 		case sleep:
 			time.Sleep(o.duration)
 
@@ -524,6 +616,9 @@ const (
 	readUint32
 	readInt32
 	readFloat32
+	readUint64
+	readInt64
+	readFloat64
 	writeCoil
 	writeCoils
 	writeUint16
@@ -531,6 +626,9 @@ const (
 	writeInt32
 	writeUint32
 	writeFloat32
+	writeInt64
+	writeUint64
+	writeFloat64
 	setUnitId
 	sleep
 	repeat
@@ -549,6 +647,8 @@ type operation struct {
 	u16		uint16
 	u32		uint32
 	f32		float32
+	u64		uint64
+	f64		float64
 	duration	time.Duration
 	unitId		uint8
 }
@@ -568,7 +668,7 @@ func parseUint16(in string) (u16 uint16, err error) {
 func parseInt16(in string) (u16 uint16, err error) {
 	var val	int64
 
-	val, err = strconv.ParseInt(in, 10, 16)
+	val, err = strconv.ParseInt(in, 0, 16)
 	if err == nil {
 		u16	= uint16(int16(val))
 	}
@@ -605,6 +705,39 @@ func parseFloat32(in string) (f32 float32, err error) {
 	val, err	= strconv.ParseFloat(in, 32)
 	if err == nil {
 		f32	= float32(val)
+	}
+
+	return
+}
+
+func parseUint64(in string) (u64 uint64, err error) {
+	var val	uint64
+
+	val, err = strconv.ParseUint(in, 0, 64)
+	if err == nil {
+		u64	= val
+	}
+
+	return
+}
+
+func parseInt64(in string) (u64 uint64, err error) {
+	var val	int64
+
+	val, err = strconv.ParseInt(in, 0, 64)
+	if err == nil {
+		u64	= uint64(val)
+	}
+
+	return
+}
+
+func parseFloat64(in string) (f64 float64, err error) {
+	var val float64
+
+	val, err	= strconv.ParseFloat(in, 64)
+	if err == nil {
+		f64	= val
 	}
 
 	return
@@ -753,11 +886,14 @@ Available commands:
 * <rh|readHoldingRegisters>:<type>:<addr>[+additional quantity]
   Read holding registers at address <addr>, plus any additional registers if specified,
   decoded as <type> which should be one of:
-  - uint16: unsigned 16-bit integer,
-  - int16: signed 16-bit integer,
-  - uint32: unsigned 32-bit integer (2 contiguous modbus registers),
-  - int32: signed 32-bit integer (2 contiguous modbus registers),
-  - float32: 32-bit floating point number (2 contiguous modbus registers).
+  - uint16:  unsigned 16-bit integer,
+  - int16:   signed 16-bit integer,
+  - uint32:  unsigned 32-bit integer (2 contiguous modbus registers),
+  - int32:   signed 32-bit integer (2 contiguous modbus registers),
+  - float32: 32-bit floating point number (2 contiguous modbus registers),
+  - uint64:  unsigned 64-bit integer (4 contiguous modbus registers),
+  - int64:   signed 64-bit integer (4 contiguous modbus registers),
+  - float64: 64-bit floating point number (4 contiguous modbus registers).
 
   rh:int16:0x300+1 	reads 2 consecutive 16-bit signed integers at addresses 0x300 and 0x301
   rh:uint32:20		reads a 32-bit unsigned integer at adresses 20-21 (2 modbus registers)
@@ -784,8 +920,8 @@ Available commands:
                         (1 modbus register)
   wr:int32:0xff00:0xff	writes 0xff as a 32-bit signed integer at addresses 0xff00-0xff01
 			(2 consecutive modbus registers)
-  wr:float32:100:-3.2	writes -3.2 as a 32-bit float at addresses 100-101
-			(2 consecutive modbus registers)
+  wr:float64:100:-3.2	writes -3.2 as a 64-bit float at addresses 100-103
+			(4 consecutive modbus registers)
 
 * sleep:<duration>
   Pause for <duration>, specified as a golang duration string.
@@ -826,9 +962,9 @@ Available commands:
 Register endianness and word order:
   The endianness of holding/input registers can be specified with --endianness <big|little> and
   defaults to big endian (as per the modbus spec).
-  For constructs spanning two consecutive registers (namely int32, uint32 and float32), the word
-  order can be set with --word-order <highfirst|lowfirst> and arbitrarily defaults to highfirst
-  (i.e. most significant word first).
+  For constructs spanning multiple consecutive registers (namely [u]int32, float32, [u]int64 and
+  float64), the word order can be set with --word-order <highfirst|lowfirst> and arbitrarily
+  defaults to highfirst (i.e. most significant word first).
 
 Examples:
   $ modbus-cli --target tcp://10.100.0.10:502 rh:uint32:0x100+5 rc:0+10 wc:3:true
