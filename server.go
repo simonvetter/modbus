@@ -16,6 +16,46 @@ type ServerConfiguration struct {
 	MaxClients	uint		// maximum number of concurrent client connections
 }
 
+// Request object passed to the coil handler.
+type CoilsRequest struct {
+	ClientAddr	string	// the source (client) IP address
+	UnitId		uint8	// the requested unit id (slave id)
+	Addr		uint16	// the base coil address requested
+	Quantity	uint16	// the number of consecutive coils covered by this request
+				// (first address: Addr, last address: Addr + Quantity - 1)
+	IsWrite		bool	// true if the request is a write, false if a read
+	Args		[]bool	// a slice of bool values of the coils to be set, ordered
+				// from Addr to Addr + Quantity - 1 (for writes only)
+}
+
+// Request object passed to the discrete input handler.
+type DiscreteInputsRequest struct {
+	ClientAddr	string	// the source (client) IP address
+	UnitId		uint8	// the requested unit id (slave id)
+	Addr		uint16	// the base discrete input address requested
+	Quantity	uint16	// the number of consecutive discrete inputs
+				// covered by this request
+}
+
+// Request object passed to the holding register handler.
+type HoldingRegistersRequest struct {
+	ClientAddr	string	// the source (client) IP address
+	UnitId		uint8	// the requested unit id (slave id)
+	Addr		uint16	// the base register address requested
+	Quantity	uint16	// the number of consecutive registers covered by this request
+	IsWrite		bool	// true if the request is a write, false if a read
+	Args		[]uint16 // a slice of register values to be set, ordered from
+				 // Addr to Addr + Quantity - 1 (for writes only)
+}
+
+// Request object passed to the input register handler.
+type InputRegistersRequest struct {
+	ClientAddr	string	// the source (client) IP address
+	UnitId		uint8	// the requested unit id (slave id)
+	Addr		uint16	// the base register address requested
+	Quantity	uint16	// the number of consecutive registers covered by this request
+}
+
 // The RequestHandler interface should be implemented by the handler
 // object passed to NewServer (see reqHandler in NewServer()).
 // After decoding and validating an incoming request, the server will
@@ -24,16 +64,9 @@ type ServerConfiguration struct {
 type RequestHandler interface {
 	// HandleCoils handles the read coils (0x01), write single coil (0x05)
 	// and write multiple coils (0x0f) function codes.
-	// Arguments passed to the handler:
-	// - unitId:	the unit id (slave id) requested,
-	// - addr:	the base coil address requested,
-	// - quantity:	the number of consecutive coils covered by this request
-	// 		(first address: addr, last address: addr + quantity - 1)
-	// - isWrite:	true if the request is a write, false if a read,
-	// - args:	a slice of bools containing the values of the coils to be set
-	//		(for writes only), ordered from addr to addr + quantity - 1.
+	// A CoilsRequest object is passed to the handler (see above).
 	//
-	// Returned values:
+	// Expected return values:
 	// - res:	a slice of bools containing the coil values to be sent to back
 	//		to the client (only sent for reads),
 	// - err:	either nil if no error occurred, a modbus error (see
@@ -44,65 +77,41 @@ type RequestHandler interface {
 	//		If non-nil, a negative modbus response is sent back, with the
 	//		exception code set depending on the error
 	//		(again, see mapErrorToExceptionCode()).
-	HandleCoils		(unitId uint8, addr uint16, quantity uint16,
-				 isWrite bool, args []bool) (
-				 res []bool, err error)
+	HandleCoils	(req *CoilsRequest) (res []bool, err error)
 
 	// HandleDiscreteInputs handles the read discrete inputs (0x02) function code.
-	// Arguments passed to the handler:
-	// - unitId:	the unit id (slave id) requested,
-	// - addr:	the base discrete input address requested,
-	// - quantity:	the number of consecutive discrete inputs covered by this request
-	// 		(first  address: addr, last address: addr + quantity - 1)
+	// A DiscreteInputsRequest oibject is passed to the handler (see above).
 	//
-	// Returned values:
+	// Expected return values:
 	// - res:	a slice of bools containing the discrete input values to be
 	//		sent back to the client,
 	// - err:	either nil if no error occurred, a modbus error (see
 	//		mapErrorToExceptionCode() in modbus.go for a complete list),
 	//		or any other error.
-	HandleDiscreteInputs	(unitId uint8, addr uint16, quantity uint16) (
-				 res []bool, err error)
+	HandleDiscreteInputs	(req *DiscreteInputsRequest) (res []bool, err error)
 
 	// HandleHoldingRegisters handles the read holding registers (0x03),
-	// write single register (0x06) and write multiple registers (0x10)
-	// function codes.
-	// Arguments passed to the handler:
-	// - unitId:	the unit id (slave id) requested,
-	// - addr:	the base holding register address requested,
-	// - quantity:	the number of consecutive registers covered by this request
-	// 		(first address: addr, last address: addr + quantity - 1)
-	// - isWrite:	true if the request is a write, false if a read,
-	// - args:	a slice of uint16 containing the values of the registers
-	//		to be set (for writes only), ordered from
-	//		addr to addr + quantity - 1.
+	// write single register (0x06) and write multiple registers (0x10).
+	// A HoldingRegistersRequest object is passed to the handler (see above).
 	//
-	// Returned values:
+	// Expected return values:
 	// - res:	a slice of uint16 containing the register values to be sent
 	//		to back to the client (only sent for reads),
 	// - err:	either nil if no error occurred, a modbus error (see
 	//		mapErrorToExceptionCode() in modbus.go for a complete list),
 	//		or any other error.
-	HandleHoldingRegisters	(unitId uint8, addr uint16, quantity uint16,
-				 isWrite bool, args []uint16) (
-				 res []uint16, err error)
+	HandleHoldingRegisters	(req *HoldingRegistersRequest) (res []uint16, err error)
 
 	// HandleInputRegisters handles the read input registers (0x04) function code.
-	// Arguments passed to the handler:
-	// - unitId:	the unit id (slave id) requested,
-	// - addr:	the base input register address requested,
-	// - quantity:	the number of consecutive registers covered by this request
-	// 		(first register address: addr,
-	//		 last register address: addr + quantity - 1)
+	// An InputRegistersRequest object is passed to the handler (see above).
 	//
-	// Returned values:
+	// Expected return values:
 	// - res:	a slice of uint16 containing the register values to be sent
 	//		back to the client,
 	// - err:	either nil if no error occurred, a modbus error (see
 	//		mapErrorToExceptionCode() in modbus.go for a complete list),
 	//		or any other error.
-	HandleInputRegisters	(unitId uint8, addr uint16, quantity uint16) (
-				 res []uint16, err error)
+	HandleInputRegisters	(req *InputRegistersRequest) (res []uint16, err error)
 }
 
 // Modbus server object.
@@ -120,7 +129,9 @@ type ModbusServer struct {
 // Returns a new modbus server.
 // reqHandler should be a user-provided handler object satisfying the RequestHandler
 // interface.
-func NewServer(conf *ServerConfiguration, reqHandler RequestHandler) (ms *ModbusServer, err error) {
+func NewServer(conf *ServerConfiguration, reqHandler RequestHandler) (
+	ms *ModbusServer, err error) {
+
 	ms = &ModbusServer{
 		conf:		*conf,
 		handler:	reqHandler,
@@ -246,6 +257,7 @@ func (ms *ModbusServer) acceptTCPClients() {
 		}
 	}
 
+	// never reached
 	return
 }
 
@@ -259,7 +271,7 @@ func (ms *ModbusServer) handleTCPClient(sock net.Conn) {
 	// create a new transport
 	tt = newTCPTransport(sock, ms.conf.Timeout)
 
-	ms.handleTransport(tt)
+	ms.handleTransport(tt, sock.RemoteAddr().String())
 
 	// once done, remove our connection from the list of active client conns
 	ms.lock.Lock()
@@ -281,7 +293,7 @@ func (ms *ModbusServer) handleTCPClient(sock net.Conn) {
 // For each request read from the transport, performs decoding and validation,
 // calls the user-provided handler, then encodes and writes the response
 // to the transport.
-func (ms *ModbusServer) handleTransport(t transport) {
+func (ms *ModbusServer) handleTransport(t transport, clientAddr string) {
 	var req		*pdu
 	var res		*pdu
 	var err		error
@@ -321,13 +333,22 @@ func (ms *ModbusServer) handleTransport(t transport) {
 
 			// invoke the appropriate handler
 			if req.functionCode == FC_READ_COILS {
-				coils, err	= ms.handler.HandleCoils(
-					req.unitId,
-					addr, quantity,
-					false, nil)
+				coils, err	= ms.handler.HandleCoils(&CoilsRequest{
+					ClientAddr:	clientAddr,
+					UnitId:		req.unitId,
+					Addr:		addr,
+					Quantity:	quantity,
+					IsWrite:	false,
+					Args:		nil,
+				})
 			} else {
 				coils, err	= ms.handler.HandleDiscreteInputs(
-					req.unitId, addr, quantity)
+					&DiscreteInputsRequest{
+						ClientAddr:	clientAddr,
+						UnitId:		req.unitId,
+						Addr:		addr,
+						Quantity:	quantity,
+					})
 			}
 			resCount	= len(coils)
 
@@ -376,11 +397,14 @@ func (ms *ModbusServer) handleTransport(t transport) {
 			}
 
 			// invoke the coil handler
-			_, err	= ms.handler.HandleCoils(
-				req.unitId,
-				addr, 1,	// quantity is 1
-				true,		// this is a write request
-				[]bool{(req.payload[2] == 0xff)})
+			_, err	= ms.handler.HandleCoils(&CoilsRequest{
+				ClientAddr:	clientAddr,
+				UnitId:		req.unitId,
+				Addr:		addr,
+				Quantity:	1, // request for a single coil
+				IsWrite:	true, // this is a write request
+				Args:		[]bool{(req.payload[2] == 0xff)},
+			})
 
 			if err != nil {
 				break
@@ -439,11 +463,14 @@ func (ms *ModbusServer) handleTransport(t transport) {
 			}
 
 			// invoke the coil handler
-			_, err		= ms.handler.HandleCoils(
-				req.unitId,
-				addr, quantity,
-				true,		// this is a write request
-				decodeBools(quantity, req.payload[5:]))
+			_, err	= ms.handler.HandleCoils(&CoilsRequest{
+				ClientAddr:	clientAddr,
+				UnitId:		req.unitId,
+				Addr:		addr,
+				Quantity:	quantity,
+				IsWrite:	true, // this is a write request
+				Args:		decodeBools(quantity, req.payload[5:]),
+			})
 
 			if err != nil {
 				break
@@ -488,12 +515,22 @@ func (ms *ModbusServer) handleTransport(t transport) {
 			// invoke the appropriate handler
 			if req.functionCode == FC_READ_HOLDING_REGISTERS {
 				regs, err	= ms.handler.HandleHoldingRegisters(
-					req.unitId,
-					addr, quantity,
-					false, nil)
+					&HoldingRegistersRequest{
+						ClientAddr:	clientAddr,
+						UnitId:		req.unitId,
+						Addr:		addr,
+						Quantity:	quantity,
+						IsWrite:	false,
+						Args:		nil,
+					})
 			} else {
 				regs, err	= ms.handler.HandleInputRegisters(
-					req.unitId, addr, quantity)
+					&InputRegistersRequest{
+						ClientAddr:	clientAddr,
+						UnitId:		req.unitId,
+						Addr:		addr,
+						Quantity:	quantity,
+					})
 			}
 			resCount	= len(regs)
 
@@ -537,10 +574,14 @@ func (ms *ModbusServer) handleTransport(t transport) {
 
 			// invoke the handler
 			_, err	= ms.handler.HandleHoldingRegisters(
-				req.unitId,
-				addr, 1,	// quantity is 1
-				true,		// this is a write request
-				[]uint16{value})
+				&HoldingRegistersRequest{
+					ClientAddr:	clientAddr,
+					UnitId:		req.unitId,
+					Addr:		addr,
+					Quantity:	1, // request for a single register
+					IsWrite:	true, // request is a write
+					Args:		[]uint16{value},
+				})
 
 			if err != nil {
 				break
@@ -597,11 +638,14 @@ func (ms *ModbusServer) handleTransport(t transport) {
 
 			// invoke the holding register handler
 			_, err		= ms.handler.HandleHoldingRegisters(
-				req.unitId,
-				addr, quantity,
-				true,		// this is a write request
-				bytesToUint16s(BIG_ENDIAN, req.payload[5:]))
-
+				&HoldingRegistersRequest{
+					ClientAddr:	clientAddr,
+					UnitId:		req.unitId,
+					Addr:		addr,
+					Quantity:	quantity,
+					IsWrite:	true, // this is a write request
+					Args:		bytesToUint16s(BIG_ENDIAN, req.payload[5:]),
+				})
 			if err != nil {
 				break
 			}
@@ -643,7 +687,9 @@ func (ms *ModbusServer) handleTransport(t transport) {
 		// in which case close the transport and return.
 		if err != nil {
 			if err == ErrProtocolError {
-				ms.logger.Warningf("protocol error, closing link")
+				ms.logger.Warningf(
+					"protocol error, closing link (client address: '%s')",
+					clientAddr)
 				t.Close()
 				return
 			} else {
@@ -666,5 +712,6 @@ func (ms *ModbusServer) handleTransport(t transport) {
 		res	= nil
 	}
 
+	// never reached
 	return
 }

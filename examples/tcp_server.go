@@ -103,8 +103,8 @@ type exampleHandler struct {
 // read-only.
 // (read them with ./modbus-cli --target tcp://localhost:5502 rc:0+99, write to register n
 // with ./modbus-cli --target tcp://localhost:5502 wr:n:<true|false>)
-func (eh *exampleHandler) HandleCoils(unitId uint8, addr uint16, quantity uint16, isWrite bool, args []bool) (res []bool, err error) {
-	if unitId != 1 {
+func (eh *exampleHandler) HandleCoils(req *modbus.CoilsRequest) (res []bool, err error) {
+	if req.UnitId != 1 {
 		// only accept unit ID #1
 		// note: we're merely filtering here, but we could as well use the unit
 		// ID field to support multiple register maps in a single server.
@@ -113,7 +113,7 @@ func (eh *exampleHandler) HandleCoils(unitId uint8, addr uint16, quantity uint16
 	}
 
 	// make sure that all registers covered by this request actually exist
-	if int(addr) + int(quantity) > len(eh.coils) {
+	if int(req.Addr) + int(req.Quantity) > len(eh.coils) {
 		err = modbus.ErrIllegalDataAddress
 		return
 	}
@@ -124,17 +124,17 @@ func (eh *exampleHandler) HandleCoils(unitId uint8, addr uint16, quantity uint16
 	// release the lock upon return
 	defer eh.lock.Unlock()
 
-	// loop through `quantity` registers, from address `addr` to
-	// `addr + quantity - 1`, which here is conveniently `addr + i`
-	for i := 0; i < int(quantity); i++ {
+	// loop through `req.Quantity` registers, from address `req.Addr` to
+	// `req.Addr + req.Quantity - 1`, which here is conveniently `req.Addr + i`
+	for i := 0; i < int(req.Quantity); i++ {
 		// ignore the write if the current register address is 80
-		if isWrite && int(addr) + i != 80 {
+		if req.IsWrite && int(req.Addr) + i != 80 {
 			// assign the value 
-			eh.coils[int(addr) + i] = args[i]
+			eh.coils[int(req.Addr) + i] = req.Args[i]
 		}
 		// append the value of the requested register to res so they can be
 		// sent back to the client
-		res	= append(res, eh.coils[int(addr) + i])
+		res	= append(res, eh.coils[int(req.Addr) + i])
 	}
 
 	return
@@ -144,7 +144,7 @@ func (eh *exampleHandler) HandleCoils(unitId uint8, addr uint16, quantity uint16
 // Note that we're returning ErrIllegalFunction unconditionally.
 // This will cause the client to receive "illegal function", which is the modbus way of
 // reporting that this server does not support/implement the discrete input type.
-func (eh *exampleHandler) HandleDiscreteInputs(unitId uint8, addr uint16, quantity uint16) (res []bool, err error) {
+func (eh *exampleHandler) HandleDiscreteInputs(req *modbus.DiscreteInputsRequest) (res []bool, err error) {
 	// this is the equivalent of saying
 	// "discrete inputs are not supported by this device"
 	// (try it with modbus-cli --target tcp://localhost:5502 rdi:1)
@@ -156,10 +156,10 @@ func (eh *exampleHandler) HandleDiscreteInputs(unitId uint8, addr uint16, quanti
 // Holding register handler method.
 // This method gets called whenever a valid modbus request asking for a holding register
 // operation (either read or write) received by the server.
-func (eh *exampleHandler) HandleHoldingRegisters(unitId uint8, addr uint16, quantity uint16, isWrite bool, args []uint16) (res []uint16, err error) {
+func (eh *exampleHandler) HandleHoldingRegisters(req *modbus.HoldingRegistersRequest) (res []uint16, err error) {
 	var regAddr	uint16
 
-	if unitId != 1 {
+	if req.UnitId != 1 {
 		// only accept unit ID #1
 		err	= modbus.ErrIllegalFunction
 		return
@@ -172,9 +172,9 @@ func (eh *exampleHandler) HandleHoldingRegisters(unitId uint8, addr uint16, quan
 	defer eh.lock.Unlock()
 
 	// loop through `quantity` registers
-	for i := 0; i < int(quantity); i++ {
+	for i := 0; i < int(req.Quantity); i++ {
 		// compute the target register address
-		regAddr	= addr + uint16(i)
+		regAddr	= req.Addr + uint16(i)
 
 		switch regAddr {
 		// expose the static, read-only value of 0xff00 in register 100
@@ -183,18 +183,21 @@ func (eh *exampleHandler) HandleHoldingRegisters(unitId uint8, addr uint16, quan
 
 		// expose holdingReg1 in register 101 (RW)
 		case 101:
-			if isWrite {
-				eh.holdingReg1	= args[i]
+			if req.IsWrite {
+				eh.holdingReg1	= req.Args[i]
 			}
 			res = append(res, eh.holdingReg1)
 
 		// expose holdingReg2 in register 102 (RW)
 		case 102:
-			if isWrite {
+			if req.IsWrite {
 				// only accept values 2 and 4
-				switch args[i] {
+				switch req.Args[i] {
 				case 2, 4:
-					eh.holdingReg2	= args[i]
+					eh.holdingReg2	= req.Args[i]
+
+					// make note of the change (e.g. for auditing purposes)
+					fmt.Printf("%s set reg#102 to %v\n", req.ClientAddr, eh.holdingReg2)
 				default:
 					// if the written value is neither 2 nor 4,
 					// return a modbus "illegal data value" to
@@ -209,10 +212,10 @@ func (eh *exampleHandler) HandleHoldingRegisters(unitId uint8, addr uint16, quan
 		// expose eh.holdingReg3 in register 103 (RW)
 		// note: eh.holdingReg3 is a signed 16-bit integer
 		case 103:
-			if isWrite {
+			if req.IsWrite {
 				// cast the 16-bit unsigned integer passed by the server
 				// to a 16-bit signed integer when writing
-				eh.holdingReg3	= int16(args[i])
+				eh.holdingReg3	= int16(req.Args[i])
 			}
 			// cast the 16-bit signed integer from the handler to a 16-bit unsigned
 			// integer so that we can append it to `res`.
@@ -221,18 +224,18 @@ func (eh *exampleHandler) HandleHoldingRegisters(unitId uint8, addr uint16, quan
 
 		// expose the 16 most-significant bits of eh.holdingReg4 in register 200
 		case 200:
-			if isWrite {
+			if req.IsWrite {
 				eh.holdingReg4	=
-					((uint32(args[i]) << 16) & 0xffff0000 |
+					((uint32(req.Args[i]) << 16) & 0xffff0000 |
 					 (eh.holdingReg4 & 0x0000ffff))
 			}
 			res = append(res, uint16((eh.holdingReg4 >> 16) & 0x0000ffff))
 
 		// expose the 16 least-significant bits of eh.holdingReg4 in register 201
 		case 201:
-			if isWrite {
+			if req.IsWrite {
 				eh.holdingReg4	=
-					(uint32(args[i]) & 0x0000ffff |
+					(uint32(req.Args[i]) & 0x0000ffff |
 					 (eh.holdingReg4 & 0xffff0000))
 			}
 			res = append(res, uint16(eh.holdingReg4 & 0x0000ffff))
@@ -252,11 +255,11 @@ func (eh *exampleHandler) HandleHoldingRegisters(unitId uint8, addr uint16, quan
 // This method gets called whenever a valid modbus request asking for an input register
 // operation is received by the server.
 // Note that input registers are always read-only as per the modbus spec.
-func (eh *exampleHandler) HandleInputRegisters(unitId uint8, addr uint16, quantity uint16) (res []uint16, err error) {
+func (eh *exampleHandler) HandleInputRegisters(req *modbus.InputRegistersRequest) (res []uint16, err error) {
 	var unixTs_s	uint32
 	var minusOne	int16 = -1
 
-	if unitId != 1 {
+	if req.UnitId != 1 {
 		// only accept unit ID #1
 		err	= modbus.ErrIllegalFunction
 		return
@@ -266,8 +269,8 @@ func (eh *exampleHandler) HandleInputRegisters(unitId uint8, addr uint16, quanti
 	// simplicity
 	unixTs_s	= uint32(time.Now().Unix() & 0xffffffff)
 
-	// loop through all register addresses from addr to addr + quantity - 1
-	for regAddr := addr; regAddr < addr + quantity; regAddr++ {
+	// loop through all register addresses from req.addr to req.addr + req.Quantity - 1
+	for regAddr := req.Addr; regAddr < req.Addr + req.Quantity; regAddr++ {
 		switch regAddr {
 		case 100:
 			// return the static value 0x1111 at address 100, as an unsigned

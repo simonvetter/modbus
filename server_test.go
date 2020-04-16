@@ -559,83 +559,83 @@ type testHandler struct {
 	holding	[10]uint16
 }
 
-func (th *testHandler) HandleCoils(unitId uint8, addr uint16, quantity uint16, isWrite bool, args []bool) (res []bool, err error) {
-	if unitId != 9 {
+func (th *testHandler) HandleCoils(req *CoilsRequest) (res []bool, err error) {
+	if req.UnitId != 9 {
 		// only reply to unit ID #9
 		err	= ErrIllegalFunction
 		return
 	}
 
-	if addr + quantity > uint16(len(th.coils)) {
+	if req.Addr + req.Quantity > uint16(len(th.coils)) {
 		err = ErrIllegalDataAddress
 		return
 	}
 
-	for i := 0; i < int(quantity); i++ {
-		if isWrite {
-			th.coils[int(addr) + i] = args[i]
+	for i := 0; i < int(req.Quantity); i++ {
+		if req.IsWrite {
+			th.coils[int(req.Addr) + i] = req.Args[i]
 		}
-		res	= append(res, th.coils[int(addr) + i])
+		res	= append(res, th.coils[int(req.Addr) + i])
 	}
 
 	return
 }
 
-func (th *testHandler) HandleDiscreteInputs(unitId uint8, addr uint16, quantity uint16) (res []bool, err error) {
-	if unitId != 9 {
+func (th *testHandler) HandleDiscreteInputs(req *DiscreteInputsRequest) (res []bool, err error) {
+	if req.UnitId != 9 {
 		// only reply to unit ID #9
 		err	= ErrIllegalFunction
 		return
 	}
 
-	if addr + quantity > uint16(len(th.di)) {
+	if req.Addr + req.Quantity > uint16(len(th.di)) {
 		err = ErrIllegalDataAddress
 		return
 	}
 
-	for i := 0; i < int(quantity); i++ {
-		res	= append(res, th.di[int(addr) + i])
+	for i := 0; i < int(req.Quantity); i++ {
+		res	= append(res, th.di[int(req.Addr) + i])
 	}
 
 	return
 }
 
-func (th *testHandler) HandleHoldingRegisters(unitId uint8, addr uint16, quantity uint16, isWrite bool, args []uint16) (res []uint16, err error) {
-	if unitId != 9 {
+func (th *testHandler) HandleHoldingRegisters(req *HoldingRegistersRequest) (res []uint16, err error) {
+	if req.UnitId != 9 {
 		// only reply to unit ID #9
 		err	= ErrIllegalFunction
 		return
 	}
 
-	if addr + quantity > uint16(len(th.holding)) {
+	if req.Addr + req.Quantity > uint16(len(th.holding)) {
 		err = ErrIllegalDataAddress
 		return
 	}
 
-	for i := 0; i < int(quantity); i++ {
-		if isWrite {
-			th.holding[int(addr) + i] = args[i]
+	for i := 0; i < int(req.Quantity); i++ {
+		if req.IsWrite {
+			th.holding[int(req.Addr) + i] = req.Args[i]
 		}
-		res	= append(res, th.holding[int(addr) + i])
+		res	= append(res, th.holding[int(req.Addr) + i])
 	}
 
 	return
 }
 
-func (th *testHandler) HandleInputRegisters(unitId uint8, addr uint16, quantity uint16) (res []uint16, err error) {
-	if unitId != 9 {
+func (th *testHandler) HandleInputRegisters(req *InputRegistersRequest) (res []uint16, err error) {
+	if req.UnitId != 9 {
 		// only reply to unit ID #9
 		err	= ErrIllegalFunction
 		return
 	}
 
-	if addr + quantity > uint16(len(th.input)) {
+	if req.Addr + req.Quantity > uint16(len(th.input)) {
 		err = ErrIllegalDataAddress
 		return
 	}
 
-	for i := 0; i < int(quantity); i++ {
-		res	= append(res, th.input[int(addr) + i])
+	for i := 0; i < int(req.Quantity); i++ {
+		res	= append(res, th.input[int(req.Addr) + i])
 	}
 
 	return
