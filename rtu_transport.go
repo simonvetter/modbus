@@ -190,24 +190,24 @@ func (rt *rtuTransport) assembleRTUFrame(p *pdu) (adu []byte) {
 // Computes the expected length of a modbus RTU response.
 func expectedResponseLenth(responseCode uint8, responseLength uint8) (byteCount int, err error) {
 	switch responseCode {
-	case FC_READ_HOLDING_REGISTERS,
-	     FC_READ_INPUT_REGISTERS,
-	     FC_READ_COILS,
-	     FC_READ_DISCRETE_INPUTS:		byteCount = int(responseLength)
-	case FC_WRITE_SINGLE_REGISTER,
-	     FC_WRITE_MULTIPLE_REGISTERS,
-	     FC_WRITE_SINGLE_COIL,
-	     FC_WRITE_MULTIPLE_COILS:		byteCount = 3
-	case FC_MASK_WRITE_REGISTER:		byteCount = 5
-	case FC_READ_HOLDING_REGISTERS | 0x80,
-	     FC_READ_INPUT_REGISTERS | 0x80,
-	     FC_READ_COILS | 0x80,
-	     FC_READ_DISCRETE_INPUTS | 0x80,
-	     FC_WRITE_SINGLE_REGISTER | 0x80,
-	     FC_WRITE_MULTIPLE_REGISTERS | 0x80,
-	     FC_WRITE_SINGLE_COIL | 0x80,
-	     FC_WRITE_MULTIPLE_COILS | 0x80,
-	     FC_MASK_WRITE_REGISTER | 0x80:	byteCount = 0
+	case fcReadHoldingRegisters,
+	     fcReadInputRegisters,
+	     fcReadCoils,
+	     fcReadDiscreteInputs:            byteCount = int(responseLength)
+	case fcWriteSingleRegister,
+	     fcWriteMultipleRegisters,
+	     fcWriteSingleCoil,
+	     fcWriteMultipleCoils:            byteCount = 3
+	case fcMaskWriteRegister:             byteCount = 5
+	case fcReadHoldingRegisters | 0x80,
+	     fcReadInputRegisters | 0x80,
+	     fcReadCoils | 0x80,
+	     fcReadDiscreteInputs | 0x80,
+	     fcWriteSingleRegister | 0x80,
+	     fcWriteMultipleRegisters | 0x80,
+	     fcWriteSingleCoil | 0x80,
+	     fcWriteMultipleCoils | 0x80,
+	     fcMaskWriteRegister | 0x80:      byteCount = 0
 	default: err = fmt.Errorf("unexpected response code (%v)", responseCode)
 	}
 

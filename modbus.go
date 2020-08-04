@@ -20,37 +20,36 @@ func (me Error) Error() (s string) {
 
 const (
 	// coils
-	FC_READ_COILS			uint8	= 0x01
-	FC_WRITE_SINGLE_COIL		uint8	= 0x05
-	FC_WRITE_MULTIPLE_COILS		uint8	= 0x0f
+	fcReadCoils                  uint8 = 0x01
+	fcWriteSingleCoil            uint8 = 0x05
+	fcWriteMultipleCoils         uint8 = 0x0f
 
 	// discrete inputs
-	FC_READ_DISCRETE_INPUTS		uint8	= 0x02
+	fcReadDiscreteInputs         uint8 = 0x02
 
 	// 16-bit input/holding registers
-	FC_READ_HOLDING_REGISTERS	uint8	= 0x03
-	FC_READ_INPUT_REGISTERS		uint8	= 0x04
-	FC_WRITE_SINGLE_REGISTER	uint8	= 0x06
-	FC_WRITE_MULTIPLE_REGISTERS	uint8	= 0x10
-	FC_MASK_WRITE_REGISTER		uint8	= 0x16
-	FC_READ_WRITE_MULTILE_REGISTERS	uint8	= 0x17
-	FC_READ_FIFO_QUEUE		uint8	= 0x18
+	fcReadHoldingRegisters       uint8 = 0x03
+	fcReadInputRegisters         uint8 = 0x04
+	fcWriteSingleRegister        uint8 = 0x06
+	fcWriteMultipleRegisters     uint8 = 0x10
+	fcMaskWriteRegister          uint8 = 0x16
+	fcReadWriteMultipleRegisters uint8 = 0x17
+	fcReadFifoQueue              uint8 = 0x18
 
 	// file access
-	FC_READ_FILE_RECORD		uint8	= 0x14
-	FC_WRITE_FILE_RECORD		uint8	= 0x15
+	fcReadFileRecord             uint8 = 0x14
+	fcWriteFileRecord            uint8 = 0x15
 
 	// exception codes
-	EX_ILLEGAL_FUNCTION		uint8	= 0x01
-	EX_ILLEGAL_DATA_ADDRESS		uint8	= 0x02
-	EX_ILLEGAL_DATA_VALUE		uint8	= 0x03
-	EX_SERVER_DEVICE_FAILURE	uint8	= 0x04
-	EX_ACKNOWLEDGE			uint8	= 0x05
-	EX_SERVER_DEVICE_BUSY		uint8	= 0x06
-	EX_MEMORY_PARITY_ERROR		uint8	= 0x08
-	EX_GW_PATH_UNAVAILABLE		uint8	= 0x0a
-	EX_GW_TARGET_FAILED_TO_RESPOND	uint8	= 0x0b
-)
+	exIllegalFunction            uint8 = 0x01
+	exIllegalDataAddress         uint8 = 0x02
+	exIllegalDataValue           uint8 = 0x03
+	exServerDeviceFailure        uint8 = 0x04
+	exAcknowledge                uint8 = 0x05
+	exServerDeviceBusy           uint8 = 0x06
+	exMemoryParityError          uint8 = 0x08
+	exGWPathUnavailable          uint8 = 0x0a
+	exGWTargetFailedToRespond    uint8 = 0x0b
 
 	// errors
 	ErrConfigurationError        Error = "configuration error"
@@ -76,17 +75,17 @@ const (
 // mapExceptionCodeToError turns a modbus exception code into a higher level Error object.
 func mapExceptionCodeToError(exceptionCode uint8) (err error) {
 	switch exceptionCode {
-	case EX_ILLEGAL_FUNCTION:		err = ErrIllegalFunction
-	case EX_ILLEGAL_DATA_ADDRESS:		err = ErrIllegalDataAddress
-	case EX_ILLEGAL_DATA_VALUE:		err = ErrIllegalDataValue
-	case EX_SERVER_DEVICE_FAILURE:		err = ErrServerDeviceFailure
-	case EX_ACKNOWLEDGE:			err = ErrAcknowledge
-	case EX_MEMORY_PARITY_ERROR:		err = ErrMemoryParityError
-	case EX_SERVER_DEVICE_BUSY:		err = ErrServerDeviceBusy
-	case EX_GW_PATH_UNAVAILABLE:		err = ErrGWPathUnavailable
-	case EX_GW_TARGET_FAILED_TO_RESPOND:	err = ErrGWTargetFailedToRespond
+	case exIllegalFunction:         err = ErrIllegalFunction
+	case exIllegalDataAddress:      err = ErrIllegalDataAddress
+	case exIllegalDataValue:        err = ErrIllegalDataValue
+	case exServerDeviceFailure:     err = ErrServerDeviceFailure
+	case exAcknowledge:             err = ErrAcknowledge
+	case exMemoryParityError:       err = ErrMemoryParityError
+	case exServerDeviceBusy:        err = ErrServerDeviceBusy
+	case exGWPathUnavailable:       err = ErrGWPathUnavailable
+	case exGWTargetFailedToRespond: err = ErrGWTargetFailedToRespond
 	default:
-		err = fmt.Errorf("unsupported exception code (%v)", exceptionCode)
+		err = fmt.Errorf("unknown exception code (%v)", exceptionCode)
 	}
 
 	return
@@ -95,18 +94,17 @@ func mapExceptionCodeToError(exceptionCode uint8) (err error) {
 // mapErrorToExceptionCode turns an Error object into a modbus exception code.
 func mapErrorToExceptionCode(err error) (exceptionCode uint8) {
 	switch err {
-	case ErrIllegalFunction:	exceptionCode = EX_ILLEGAL_FUNCTION
-	case ErrIllegalDataAddress:	exceptionCode = EX_ILLEGAL_DATA_ADDRESS
-	case ErrIllegalDataValue:	exceptionCode = EX_ILLEGAL_DATA_VALUE
-	case ErrServerDeviceFailure:    exceptionCode = EX_SERVER_DEVICE_FAILURE
-	case ErrAcknowledge:		exceptionCode = EX_ACKNOWLEDGE
-	case ErrMemoryParityError:      exceptionCode = EX_MEMORY_PARITY_ERROR
-	case ErrServerDeviceBusy:	exceptionCode = EX_SERVER_DEVICE_BUSY
-	case ErrGWPathUnavailable:	exceptionCode = EX_GW_PATH_UNAVAILABLE
-	case ErrGWTargetFailedToRespond:
-		exceptionCode = EX_GW_TARGET_FAILED_TO_RESPOND
+	case ErrIllegalFunction:         exceptionCode = exIllegalFunction
+	case ErrIllegalDataAddress:      exceptionCode = exIllegalDataAddress
+	case ErrIllegalDataValue:        exceptionCode = exIllegalDataValue
+	case ErrServerDeviceFailure:     exceptionCode = exServerDeviceFailure
+	case ErrAcknowledge:             exceptionCode = exAcknowledge
+	case ErrMemoryParityError:       exceptionCode = exMemoryParityError
+	case ErrServerDeviceBusy:        exceptionCode = exServerDeviceBusy
+	case ErrGWPathUnavailable:       exceptionCode = exGWPathUnavailable
+	case ErrGWTargetFailedToRespond: exceptionCode = exGWTargetFailedToRespond
 	default:
-		exceptionCode = EX_SERVER_DEVICE_FAILURE
+		exceptionCode = exServerDeviceFailure
 	}
 
 	return

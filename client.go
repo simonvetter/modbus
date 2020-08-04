@@ -412,8 +412,8 @@ func (mc *ModbusClient) WriteCoil(addr uint16, value bool) (err error) {
 
 	// create and fill in the request object
 	req	= &pdu{
-		unitId:		mc.unitId,
-		functionCode:	FC_WRITE_SINGLE_COIL,
+		unitId:	      mc.unitId,
+		functionCode: fcWriteSingleCoil,
 	}
 
 	// coil address
@@ -495,8 +495,8 @@ func (mc *ModbusClient) WriteCoils(addr uint16, values []bool) (err error) {
 
 	// create and fill in the request object
 	req	= &pdu{
-		unitId:		mc.unitId,
-		functionCode:	FC_WRITE_MULTIPLE_COILS,
+		unitId:       mc.unitId,
+		functionCode: fcWriteMultipleCoils,
 	}
 
 	// start address
@@ -553,8 +553,8 @@ func (mc *ModbusClient) WriteRegister(addr uint16, value uint16) (err error) {
 
 	// create and fill in the request object
 	req	= &pdu{
-		unitId:		mc.unitId,
-		functionCode:	FC_WRITE_SINGLE_REGISTER,
+		unitId:	      mc.unitId,
+		functionCode: fcWriteSingleRegister,
 	}
 
 	// register address
@@ -730,9 +730,9 @@ func (mc *ModbusClient) readBools(addr uint16, quantity uint16, di bool) (values
 	}
 
 	if di {
-		req.functionCode	= FC_READ_DISCRETE_INPUTS
+		req.functionCode = fcReadDiscreteInputs
 	} else {
-		req.functionCode	= FC_READ_COILS
+		req.functionCode = fcReadCoils
 	}
 
 	// start address
@@ -802,8 +802,8 @@ func (mc *ModbusClient) readRegisters(addr uint16, quantity uint16, regType RegT
 	}
 
 	switch regType {
-	case HOLDING_REGISTER:	req.functionCode = FC_READ_HOLDING_REGISTERS
-	case INPUT_REGISTER:	req.functionCode = FC_READ_INPUT_REGISTERS
+	case HOLDING_REGISTER: req.functionCode = fcReadHoldingRegisters
+	case INPUT_REGISTER:   req.functionCode = fcReadInputRegisters
 	default:
 		err = ErrUnexpectedParameters
 		mc.logger.Errorf("unexpected register type (%v)", regType)
@@ -907,8 +907,8 @@ func (mc *ModbusClient) writeRegisters(addr uint16, values []byte) (err error) {
 
 	// create and fill in the request object
 	req	= &pdu{
-		unitId:		mc.unitId,
-		functionCode:	FC_WRITE_MULTIPLE_REGISTERS,
+		unitId:	      mc.unitId,
+		functionCode: fcWriteMultipleRegisters,
 	}
 
 	// base address
