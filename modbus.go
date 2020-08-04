@@ -2,13 +2,20 @@ package modbus
 
 import (
 	"fmt"
-	"errors"
 )
 
 type pdu struct {
 	unitId		uint8
 	functionCode	uint8
 	payload		[]byte
+}
+
+type Error string
+
+// Error implements the error interface.
+func (me Error) Error() (s string) {
+	s = string(me)
+	return
 }
 
 const (
@@ -45,27 +52,28 @@ const (
 	EX_GW_TARGET_FAILED_TO_RESPOND	uint8	= 0x0b
 )
 
-var (
-	ErrConfigurationError		error = errors.New("configuration error")
-	ErrRequestTimedOut		error = errors.New("request timed out")
-	ErrIllegalFunction		error = errors.New("illegal function")
-	ErrIllegalDataAddress		error = errors.New("illegal data address")
-	ErrIllegalDataValue		error = errors.New("illegal data value")
-	ErrServerDeviceFailure		error = errors.New("server device failure")
-	ErrAcknowledge			error = errors.New("request acknowledged")
-	ErrServerDeviceBusy		error = errors.New("server device busy")
-	ErrMemoryParityError		error = errors.New("memory parity error")
-	ErrGWPathUnavailable		error = errors.New("gateway path unavailable")
-	ErrGWTargetFailedToRespond	error = errors.New("gateway target device failed to respond")
-	ErrBadCRC			error = errors.New("bad crc")
-	ErrShortFrame			error = errors.New("short frame")
-	ErrProtocolError		error = errors.New("protocol error")
-	ErrBadUnitId			error = errors.New("bad unit id")
-	ErrBadTransactionId		error = errors.New("bad transaction id")
-	ErrUnknownProtocolId		error = errors.New("unknown protocol identifier")
-	ErrUnexpectedParameters		error = errors.New("unexpected parameters")
+	// errors
+	ErrConfigurationError        Error = "configuration error"
+	ErrRequestTimedOut           Error = "request timed out"
+	ErrIllegalFunction           Error = "illegal function"
+	ErrIllegalDataAddress        Error = "illegal data address"
+	ErrIllegalDataValue          Error = "illegal data value"
+	ErrServerDeviceFailure       Error = "server device failure"
+	ErrAcknowledge               Error = "request acknowledged"
+	ErrServerDeviceBusy          Error = "server device busy"
+	ErrMemoryParityError         Error = "memory parity error"
+	ErrGWPathUnavailable         Error = "gateway path unavailable"
+	ErrGWTargetFailedToRespond   Error = "gateway target device failed to respond"
+	ErrBadCRC                    Error = "bad crc"
+	ErrShortFrame                Error = "short frame"
+	ErrProtocolError             Error = "protocol error"
+	ErrBadUnitId                 Error = "bad unit id"
+	ErrBadTransactionId          Error = "bad transaction id"
+	ErrUnknownProtocolId         Error = "unknown protocol identifier"
+	ErrUnexpectedParameters      Error = "unexpected parameters"
 )
 
+// mapExceptionCodeToError turns a modbus exception code into a higher level Error object.
 func mapExceptionCodeToError(exceptionCode uint8) (err error) {
 	switch exceptionCode {
 	case EX_ILLEGAL_FUNCTION:		err = ErrIllegalFunction
@@ -84,6 +92,7 @@ func mapExceptionCodeToError(exceptionCode uint8) (err error) {
 	return
 }
 
+// mapErrorToExceptionCode turns an Error object into a modbus exception code.
 func mapErrorToExceptionCode(err error) (exceptionCode uint8) {
 	switch err {
 	case ErrIllegalFunction:	exceptionCode = EX_ILLEGAL_FUNCTION
