@@ -150,7 +150,7 @@ func NewServer(conf *ServerConfiguration, reqHandler RequestHandler) (
 			ms.conf.MaxClients = 10
 		}
 
-		ms.transportType	= TCP_TRANSPORT
+		ms.transportType	= modbusTCP
 
 	default:
 		err	= ErrConfigurationError
@@ -172,7 +172,7 @@ func (ms *ModbusServer) Start() (err error) {
 	}
 
 	switch ms.transportType {
-	case TCP_TRANSPORT:
+	case modbusTCP:
 		// bind to a TCP socket
 		ms.tcpListener, err	= net.Listen("tcp", ms.conf.URL)
 		if err != nil {
@@ -203,7 +203,7 @@ func (ms *ModbusServer) Stop() (err error) {
 
 	ms.started = false
 
-	if ms.transportType == TCP_TRANSPORT {
+	if ms.transportType == modbusTCP {
 		// close the server socket if we're listening over TCP
 		err	= ms.tcpListener.Close()
 

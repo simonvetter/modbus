@@ -84,7 +84,7 @@ func NewClient(conf *ClientConfiguration) (mc *ModbusClient, err error) {
 			mc.conf.Timeout = 300 * time.Millisecond
 		}
 
-		mc.transportType	= RTU_TRANSPORT
+		mc.transportType	= modbusRTU
 
 	case strings.HasPrefix(mc.conf.URL, "rtuovertcp://"):
 		mc.conf.URL	= strings.TrimPrefix(mc.conf.URL, "rtuovertcp://")
@@ -93,7 +93,7 @@ func NewClient(conf *ClientConfiguration) (mc *ModbusClient, err error) {
 			mc.conf.Timeout = 1 * time.Second
 		}
 
-		mc.transportType	= RTU_OVER_TCP_TRANSPORT
+		mc.transportType	= modbusRTUOverTCP
 
 	case strings.HasPrefix(mc.conf.URL, "tcp://"):
 		mc.conf.URL	= strings.TrimPrefix(mc.conf.URL, "tcp://")
@@ -102,7 +102,7 @@ func NewClient(conf *ClientConfiguration) (mc *ModbusClient, err error) {
 			mc.conf.Timeout = 1 * time.Second
 		}
 
-		mc.transportType	= TCP_TRANSPORT
+		mc.transportType	= modbusTCP
 
 	default:
 		err	= ErrConfigurationError
@@ -126,7 +126,7 @@ func (mc *ModbusClient) Open() (err error) {
 	defer mc.lock.Unlock()
 
 	switch mc.transportType {
-	case RTU_TRANSPORT:
+	case modbusRTU:
 		// create a serial port wrapper object
 		spw = newSerialPortWrapper(&serialPortConfig{
 			Device:		mc.conf.URL,
@@ -149,7 +149,7 @@ func (mc *ModbusClient) Open() (err error) {
 		mc.transport = newRTUTransport(
 			spw, mc.conf.URL, mc.conf.Speed, mc.conf.Timeout)
 
-	case RTU_OVER_TCP_TRANSPORT:
+	case modbusRTUOverTCP:
 		// connect to the remote host
 		sock, err	= net.DialTimeout("tcp", mc.conf.URL, 5 * time.Second)
 		if err != nil {
@@ -163,7 +163,7 @@ func (mc *ModbusClient) Open() (err error) {
 		mc.transport = newRTUTransport(
 			sock, mc.conf.URL, mc.conf.Speed, mc.conf.Timeout)
 
-	case TCP_TRANSPORT:
+	case modbusTCP:
 		// connect to the remote host
 		sock, err	= net.DialTimeout("tcp", mc.conf.URL, 5 * time.Second)
 		if err != nil {
