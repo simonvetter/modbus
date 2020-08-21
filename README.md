@@ -6,9 +6,13 @@ It aims to provide a simple-to-use, high-level API to interact with modbus
 devices using native Go types.
 
 Both client and server components are available.
-The client can be used over both TCP and RTU (serial), and supports an
-RTU over TCP mode to allow the use of remote serial ports or cheap TCP to
-serial bridges.
+
+The client supports the following modes:
+- modbus RTU (serial, over both RS-232 and RS-485),
+- modbus TCP (a.k.a. MBAP),
+- modbus TCP over TLS (a.k.a. MBAPS),
+- modbus RTU over TCP (RTU tunneled in TCP for use with e.g. remote serial
+  ports or cheap TCP to serial bridges).
 
 The server is TCP-only for now.
 
@@ -35,6 +39,7 @@ func main() {
     var err      error
 
     // for a TCP endpoint
+    // (see examples/tls_client.go for TLS usage and options)
     client, err = modbus.NewClient(&modbus.ClientConfiguration{
         URL:      "tcp://hostname-or-ip-address:502",
         Timeout:  1 * time.Second,

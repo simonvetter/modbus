@@ -1,6 +1,8 @@
 package modbus
 
 import (
+	"crypto/tls"
+	"crypto/x509"
 	"fmt"
 	"net"
 	"time"
@@ -28,15 +30,30 @@ const (
 	LOW_WORD_FIRST		WordOrder	= 2
 )
 
+// Modbus client configuration object.
 type ClientConfiguration struct {
-	URL		string
-	Speed		uint
-	DataBits	uint
-	Parity		uint
-	StopBits	uint
-	Timeout		time.Duration
+	// URL sets the client mode and target location in the form
+	// <mode>://<serial device or host:port> e.g. tcp://plc:502
+	URL           string
+	// Speed sets the serial link speed (in bps, rtu only)
+	Speed         uint
+	// DataBits sets the number of bits per serial character (rtu only)
+	DataBits      uint
+	// Parity sets the serial link parity mode (rtu only)
+	Parity        uint
+	// StopBits sets the number of serial stop bits (rtu only)
+	StopBits      uint
+	// Timeout sets the request timeout value
+	Timeout       time.Duration
+	// TLSClientCert sets the client-side TLS key pair (tcp+tls only)
+	TLSClientCert *tls.Certificate
+	// TLSRootCAs sets the list of CA certificates used to authenticate
+	// the server (tcp+tls only). Leaf (i.e. server) certificates can also
+	// be used in case of self-signed certs, or if cert pinning is required.
+	TLSRootCAs    *x509.CertPool
 }
 
+// Modbus client object.
 type ModbusClient struct {
 	conf		ClientConfiguration
 	logger		*logger
@@ -48,15 +65,25 @@ type ModbusClient struct {
 	transportType	transportType
 }
 
+// NewClient creates, configures and returns a modbus client object.
 func NewClient(conf *ClientConfiguration) (mc *ModbusClient, err error) {
+	var clientType string
+	var splitURL   []string
+
 	mc = &ModbusClient{
 		conf:	*conf,
 	}
 
-	switch {
-	case strings.HasPrefix(mc.conf.URL, "rtu://"):
-		mc.conf.URL	= strings.TrimPrefix(mc.conf.URL, "rtu://")
+	splitURL = strings.SplitN(mc.conf.URL, "://", 2)
+	if len(splitURL) == 2 {
+		clientType  = splitURL[0]
+		mc.conf.URL = splitURL[1]
+	}
 
+	mc.logger = newLogger(fmt.Sprintf("modbus-client(%s)", mc.conf.URL))
+
+	switch clientType {
+	case "rtu":
 		// set useful defaults
 		if mc.conf.Speed == 0 {
 			mc.conf.Speed	= 9600
@@ -86,25 +113,50 @@ func NewClient(conf *ClientConfiguration) (mc *ModbusClient, err error) {
 
 		mc.transportType	= modbusRTU
 
-	case strings.HasPrefix(mc.conf.URL, "rtuovertcp://"):
-		mc.conf.URL	= strings.TrimPrefix(mc.conf.URL, "rtuovertcp://")
-
+	case "rtuovertcp":
 		if mc.conf.Timeout == 0 {
 			mc.conf.Timeout = 1 * time.Second
 		}
 
 		mc.transportType	= modbusRTUOverTCP
 
-	case strings.HasPrefix(mc.conf.URL, "tcp://"):
-		mc.conf.URL	= strings.TrimPrefix(mc.conf.URL, "tcp://")
-
+	case "tcp":
 		if mc.conf.Timeout == 0 {
 			mc.conf.Timeout = 1 * time.Second
 		}
 
 		mc.transportType	= modbusTCP
 
+	case "tcp+tls":
+		if mc.conf.Timeout == 0 {
+			mc.conf.Timeout = 1 * time.Second
+		}
+
+		// expect a client-side certificate for mutual auth as the
+		// modbus/mpab protocol has no inherent auth facility.
+		// (see requirements R-08 and R-19 of the MBAPS spec)
+		if mc.conf.TLSClientCert == nil {
+			mc.logger.Errorf("missing client certificate")
+			err = ErrConfigurationError
+			return
+		}
+
+		// expect a CertPool object containing at least 1 CA or
+		// leaf certificate to validate the server-side cert
+		if mc.conf.TLSRootCAs == nil {
+			mc.logger.Errorf("missing CA/server certificate")
+			err = ErrConfigurationError
+			return
+		}
+
+		mc.transportType	= modbusTCPOverTLS
+
 	default:
+		if len(splitURL) != 2 {
+			mc.logger.Errorf("missing client type in URL '%s'", mc.conf.URL)
+		} else {
+			mc.logger.Errorf("unsupported client type '%s'", clientType)
+		}
 		err	= ErrConfigurationError
 		return
 	}
@@ -112,7 +164,6 @@ func NewClient(conf *ClientConfiguration) (mc *ModbusClient, err error) {
 	mc.unitId	= 1
 	mc.endianness	= BIG_ENDIAN
 	mc.wordOrder	= HIGH_WORD_FIRST
-	mc.logger	= newLogger(fmt.Sprintf("modbus-client(%s)", mc.conf.URL))
 
 	return
 }
@@ -151,7 +202,7 @@ func (mc *ModbusClient) Open() (err error) {
 
 	case modbusRTUOverTCP:
 		// connect to the remote host
-		sock, err	= net.DialTimeout("tcp", mc.conf.URL, 5 * time.Second)
+		sock, err = net.DialTimeout("tcp", mc.conf.URL, 5 * time.Second)
 		if err != nil {
 			return
 		}
@@ -165,8 +216,36 @@ func (mc *ModbusClient) Open() (err error) {
 
 	case modbusTCP:
 		// connect to the remote host
-		sock, err	= net.DialTimeout("tcp", mc.conf.URL, 5 * time.Second)
+		sock, err = net.DialTimeout("tcp", mc.conf.URL, 5 * time.Second)
 		if err != nil {
+			return
+		}
+
+		// create the TCP transport
+		mc.transport = newTCPTransport(sock, mc.conf.Timeout)
+
+	case modbusTCPOverTLS:
+		// connect to the remote host with TLS
+		sock, err = tls.DialWithDialer(
+			&net.Dialer{
+				Deadline: time.Now().Add(15 * time.Second),
+			}, "tcp", mc.conf.URL,
+			&tls.Config{
+				Certificates: []tls.Certificate{
+					*mc.conf.TLSClientCert,
+				},
+				RootCAs:     mc.conf.TLSRootCAs,
+				// mandate TLS 1.2 or higher (see R-01 of the MBAPS spec)
+				MinVersion:  tls.VersionTLS12,
+			})
+		if err != nil {
+			return
+		}
+
+		// force the TLS handshake
+		err = sock.(*tls.Conn).Handshake()
+		if err != nil {
+			sock.Close()
 			return
 		}
 
