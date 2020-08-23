@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"flag"
@@ -13,22 +14,26 @@ import (
 )
 
 func main() {
-	var err		error
-	var help	bool
-	var client	*modbus.ModbusClient
-	var config	*modbus.ClientConfiguration
-	var target	string
-	var speed	uint
-	var dataBits	uint
-	var parity	string
-	var stopBits	uint
-	var endianness	string
-	var wordOrder	string
-	var timeout	string
-	var cEndianess	modbus.Endianness
-	var cWordOrder	modbus.WordOrder
-	var unitId	uint
-	var runList	[]operation
+	var err	          error
+	var help          bool
+	var client        *modbus.ModbusClient
+	var config        *modbus.ClientConfiguration
+	var target        string
+	var caPath        string          // path to TLS CA/server certificate
+	var certPath      string          // path to TLS client certificate
+	var keyPath       string          // path to TLS client key
+	var clientKeyPair tls.Certificate
+	var speed         uint
+	var dataBits      uint
+	var parity        string
+	var stopBits      uint
+	var endianness    string
+	var wordOrder     string
+	var timeout       string
+	var cEndianess    modbus.Endianness
+	var cWordOrder    modbus.WordOrder
+	var unitId        uint
+	var runList       []operation
 
 	flag.StringVar(&target, "target", "rtu:///dev/ttyUSB0", "target device to connect to (e.g. tcp://somehost:502) [required]")
 	flag.UintVar(&speed, "speed", 9600, "serial bus speed in bps (rtu)")
@@ -39,6 +44,9 @@ func main() {
 	flag.StringVar(&endianness, "endianness", "big", "register endianness <little|big>")
 	flag.StringVar(&wordOrder, "word-order", "highfirst", "word ordering for 32-bit registers <highfirst|hf|lowfirst|lf>")
 	flag.UintVar(&unitId, "unit-id", 1, "unit/slave id to use")
+	flag.StringVar(&certPath, "cert", "", "path to TLS client certificate")
+	flag.StringVar(&keyPath, "key", "", "path to TLS client key")
+	flag.StringVar(&caPath, "ca", "", "path to TLS CA/server certificate")
 	flag.BoolVar(&help, "help", false, "show a wall-of-text help message")
 	flag.Parse()
 
@@ -88,6 +96,37 @@ func main() {
 		fmt.Printf("unknown word order setting '%s' (should be one of highfirst, hf, littlefirst, lf)\n",
 			   wordOrder)
 		os.Exit(1)
+	}
+
+	// handle TLS options
+	if strings.HasPrefix(target, "tcp+tls://") {
+		if certPath == "" {
+			fmt.Print("TLS requested but no client certificate given, please use --cert\n")
+			os.Exit(1)
+		}
+
+		if keyPath == "" {
+			fmt.Print("TLS requested but no client key given, please use --key\n")
+			os.Exit(1)
+		}
+
+		if caPath == "" {
+			fmt.Print("TLS requested but no CA/server cert given, please use --ca\n")
+			os.Exit(1)
+		}
+
+		clientKeyPair, err = tls.LoadX509KeyPair(certPath, keyPath)
+		if err != nil {
+			fmt.Printf("failed to load client tls key pair: %v\n", err)
+			os.Exit(1)
+		}
+		config.TLSClientCert = &clientKeyPair
+
+		config.TLSRootCAs, err = modbus.LoadCertPool(caPath)
+		if err != nil {
+			fmt.Printf("failed to load tls CA/server certificate: %v\n", err)
+			os.Exit(1)
+		}
 	}
 
 	if len(flag.Args()) == 0 {
@@ -984,6 +1023,13 @@ Examples:
   Connect to somehost port 502 and perform a scan of all modbus types (namely
   holding registers, input registers, discrete inputs and coils).
 
+  $ modbus-cli --target tcp+tls://securehost:802 --cert client.cert.pem --key client.key.pem \
+    --ca ca.cert.pem rh:uint32:0x3000
+  Connect to securehost port 802 using modbus/TCP over TLS, using client.cert.pem and
+  client.key.pem to authenticate to the server (client auth) and ca.cert.pem to authenticate
+  the server, then read holding registers 0x3000-0x3001 as a 32-bit unsigned integer.
+  Note that ca.cert.pem can either be a CA (Certificate Authority) or the server (leaf)
+  certificate.
 `)
 
 	return
