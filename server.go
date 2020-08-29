@@ -1,6 +1,10 @@
 package modbus
 
 import (
+	"crypto/tls"
+	"crypto/x509"
+	"encoding/asn1"
+	"errors"
 	"fmt"
 	"time"
 	"net"
@@ -8,52 +12,69 @@ import (
 	"sync"
 )
 
+// Modbus Role PEM OID (see R-21 of the MBAPS spec)
+var modbusRoleOID asn1.ObjectIdentifier = asn1.ObjectIdentifier{
+	1, 3, 6, 1, 4, 1, 50316, 802, 1,
+}
+
 // Server configuration object.
 type ServerConfiguration struct {
-	URL		string		// where to listen at e.g. tcp://[::]:502
-	Timeout		time.Duration	// idle session timeout (client connection will be
-					// closed if idle for this long)
-	MaxClients	uint		// maximum number of concurrent client connections
+	// URL defines where to listen at e.g. tcp://[::]:502
+	URL           string
+	// Timeout sets the idle session timeout (client connections will
+	// be closed if idle for this long)
+	Timeout	      time.Duration
+	// MaxClients sets the maximum number of concurrent client connections
+	MaxClients    uint
+	// TLSServerCert sets the server-side TLS key pair (tcp+tls only)
+	TLSServerCert *tls.Certificate
+	// TLSClientCAs sets the list of CA certificates used to authenticate
+	// client connections (tcp+tls only). Leaf (i.e. client) certificates can
+	// also be used in case of self-signed certs, or if cert pinning is required.
+	TLSClientCAs  *x509.CertPool
 }
 
 // Request object passed to the coil handler.
 type CoilsRequest struct {
-	ClientAddr	string	// the source (client) IP address
-	UnitId		uint8	// the requested unit id (slave id)
-	Addr		uint16	// the base coil address requested
-	Quantity	uint16	// the number of consecutive coils covered by this request
-				// (first address: Addr, last address: Addr + Quantity - 1)
-	IsWrite		bool	// true if the request is a write, false if a read
-	Args		[]bool	// a slice of bool values of the coils to be set, ordered
-				// from Addr to Addr + Quantity - 1 (for writes only)
+	ClientAddr string  // the source (client) IP address
+	ClientRole string  // the client role as encoded in the client certificate (tcp+tls only)
+	UnitId     uint8   // the requested unit id (slave id)
+	Addr       uint16  // the base coil address requested
+	Quantity   uint16  // the number of consecutive coils covered by this request
+	                   // (first address: Addr, last address: Addr + Quantity - 1)
+	IsWrite    bool    // true if the request is a write, false if a read
+	Args       []bool  // a slice of bool values of the coils to be set, ordered
+	                   // from Addr to Addr + Quantity - 1 (for writes only)
 }
 
 // Request object passed to the discrete input handler.
 type DiscreteInputsRequest struct {
-	ClientAddr	string	// the source (client) IP address
-	UnitId		uint8	// the requested unit id (slave id)
-	Addr		uint16	// the base discrete input address requested
-	Quantity	uint16	// the number of consecutive discrete inputs
-				// covered by this request
+	ClientAddr string  // the source (client) IP address
+	ClientRole string  // the client role as encoded in the client certificate (tcp+tls only)
+	UnitId     uint8   // the requested unit id (slave id)
+	Addr       uint16  // the base discrete input address requested
+	Quantity   uint16  // the number of consecutive discrete inputs covered by this request
 }
 
 // Request object passed to the holding register handler.
 type HoldingRegistersRequest struct {
-	ClientAddr	string	// the source (client) IP address
-	UnitId		uint8	// the requested unit id (slave id)
-	Addr		uint16	// the base register address requested
-	Quantity	uint16	// the number of consecutive registers covered by this request
-	IsWrite		bool	// true if the request is a write, false if a read
-	Args		[]uint16 // a slice of register values to be set, ordered from
-				 // Addr to Addr + Quantity - 1 (for writes only)
+	ClientAddr string   // the source (client) IP address
+	ClientRole string   // the client role as encoded in the client certificate (tcp+tls only)
+	UnitId     uint8    // the requested unit id (slave id)
+	Addr       uint16   // the base register address requested
+	Quantity   uint16   // the number of consecutive registers covered by this request
+	IsWrite    bool     // true if the request is a write, false if a read
+	Args       []uint16 // a slice of register values to be set, ordered from
+	                    // Addr to Addr + Quantity - 1 (for writes only)
 }
 
 // Request object passed to the input register handler.
 type InputRegistersRequest struct {
-	ClientAddr	string	// the source (client) IP address
-	UnitId		uint8	// the requested unit id (slave id)
-	Addr		uint16	// the base register address requested
-	Quantity	uint16	// the number of consecutive registers covered by this request
+	ClientAddr string   // the source (client) IP address
+	ClientRole string   // the client role as encoded in the client certificate (tcp+tls only)
+	UnitId     uint8    // the requested unit id (slave id)
+	Addr       uint16   // the base register address requested
+	Quantity   uint16   // the number of consecutive registers covered by this request
 }
 
 // The RequestHandler interface should be implemented by the handler
@@ -131,17 +152,30 @@ type ModbusServer struct {
 // interface.
 func NewServer(conf *ServerConfiguration, reqHandler RequestHandler) (
 	ms *ModbusServer, err error) {
+	var serverType string
+	var splitURL   []string
 
 	ms = &ModbusServer{
 		conf:		*conf,
 		handler:	reqHandler,
-		logger:		newLogger("modbus-server"),
 	}
 
-	switch {
-	case strings.HasPrefix(ms.conf.URL, "tcp://"):
-		ms.conf.URL	= strings.TrimPrefix(ms.conf.URL, "tcp://")
+	splitURL = strings.SplitN(ms.conf.URL, "://", 2)
+	if len(splitURL) == 2 {
+		serverType  = splitURL[0]
+		ms.conf.URL = splitURL[1]
+	}
 
+	ms.logger = newLogger(fmt.Sprintf("modbus-server(%s)", ms.conf.URL))
+
+	if ms.conf.URL == "" {
+		ms.logger.Errorf("missing host part in URL '%s')", conf.URL)
+		err = ErrConfigurationError
+		return
+	}
+
+	switch serverType {
+	case "tcp":
 		if ms.conf.Timeout == 0 {
 			ms.conf.Timeout = 120 * time.Second
 		}
@@ -152,12 +186,36 @@ func NewServer(conf *ServerConfiguration, reqHandler RequestHandler) (
 
 		ms.transportType	= modbusTCP
 
+	case "tcp+tls":
+		if ms.conf.Timeout == 0 {
+			ms.conf.Timeout = 120 * time.Second
+		}
+
+		if ms.conf.MaxClients == 0 {
+			ms.conf.MaxClients = 10
+		}
+
+		// expect a server-side certificate
+		if ms.conf.TLSServerCert == nil {
+			ms.logger.Errorf("missing server certificate")
+			err = ErrConfigurationError
+			return
+		}
+
+		// expect a CertPool object containing at least 1 CA or
+		// leaf certificate to validate client-side certificates
+		if ms.conf.TLSClientCAs == nil {
+			ms.logger.Errorf("missing CA/client certificates")
+			err = ErrConfigurationError
+			return
+		}
+
+		ms.transportType	= modbusTCPOverTLS
+
 	default:
 		err	= ErrConfigurationError
 		return
 	}
-
-	ms.logger	= newLogger(fmt.Sprintf("modbus-server(%s)", ms.conf.URL))
 
 	return
 }
@@ -172,7 +230,7 @@ func (ms *ModbusServer) Start() (err error) {
 	}
 
 	switch ms.transportType {
-	case modbusTCP:
+	case modbusTCP, modbusTCPOverTLS:
 		// bind to a TCP socket
 		ms.tcpListener, err	= net.Listen("tcp", ms.conf.URL)
 		if err != nil {
@@ -203,7 +261,7 @@ func (ms *ModbusServer) Stop() (err error) {
 
 	ms.started = false
 
-	if ms.transportType == modbusTCP {
+	if ms.transportType == modbusTCP || ms.transportType == modbusTCPOverTLS {
 		// close the server socket if we're listening over TCP
 		err	= ms.tcpListener.Close()
 
@@ -266,12 +324,33 @@ func (ms *ModbusServer) acceptTCPClients() {
 // out, or an unrecoverable error happened), the TCP socket is closed and removed
 // from the list of active client connections.
 func (ms *ModbusServer) handleTCPClient(sock net.Conn) {
-	var tt	*tcpTransport
+	var err        error
+	var clientRole string
+	var tlsSock    net.Conn
 
-	// create a new transport
-	tt = newTCPTransport(sock, ms.conf.Timeout)
+	switch ms.transportType {
+	case modbusTCP:
+		// serve modbus requests over the raw TCP connection
+		ms.handleTransport(
+			newTCPTransport(sock, ms.conf.Timeout),
+			sock.RemoteAddr().String(), "")
 
-	ms.handleTransport(tt, sock.RemoteAddr().String())
+	case modbusTCPOverTLS:
+		// start TLS negotiation over the raw TCP connection
+		tlsSock, clientRole, err = ms.startTLS(sock)
+		if err != nil {
+			ms.logger.Warningf("TLS handshake with %s failed: %v",
+				sock.RemoteAddr().String(), err)
+		} else {
+			// serve modbus requests over the TLS tunnel
+			ms.handleTransport(
+				newTCPTransport(tlsSock, ms.conf.Timeout),
+				sock.RemoteAddr().String(), clientRole)
+		}
+
+	default:
+		ms.logger.Errorf("unimplemented transport type %v", ms.transportType)
+	}
 
 	// once done, remove our connection from the list of active client conns
 	ms.lock.Lock()
@@ -293,7 +372,7 @@ func (ms *ModbusServer) handleTCPClient(sock net.Conn) {
 // For each request read from the transport, performs decoding and validation,
 // calls the user-provided handler, then encodes and writes the response
 // to the transport.
-func (ms *ModbusServer) handleTransport(t transport, clientAddr string) {
+func (ms *ModbusServer) handleTransport(t transport, clientAddr string, clientRole string) {
 	var req		*pdu
 	var res		*pdu
 	var err		error
@@ -334,20 +413,22 @@ func (ms *ModbusServer) handleTransport(t transport, clientAddr string) {
 			// invoke the appropriate handler
 			if req.functionCode == fcReadCoils {
 				coils, err	= ms.handler.HandleCoils(&CoilsRequest{
-					ClientAddr:	clientAddr,
-					UnitId:		req.unitId,
-					Addr:		addr,
-					Quantity:	quantity,
-					IsWrite:	false,
-					Args:		nil,
+					ClientAddr: clientAddr,
+					ClientRole: clientRole,
+					UnitId:     req.unitId,
+					Addr:       addr,
+					Quantity:   quantity,
+					IsWrite:    false,
+					Args:       nil,
 				})
 			} else {
 				coils, err	= ms.handler.HandleDiscreteInputs(
 					&DiscreteInputsRequest{
-						ClientAddr:	clientAddr,
-						UnitId:		req.unitId,
-						Addr:		addr,
-						Quantity:	quantity,
+						ClientAddr: clientAddr,
+						ClientRole: clientRole,
+						UnitId:     req.unitId,
+						Addr:       addr,
+						Quantity:   quantity,
 					})
 			}
 			resCount	= len(coils)
@@ -398,12 +479,13 @@ func (ms *ModbusServer) handleTransport(t transport, clientAddr string) {
 
 			// invoke the coil handler
 			_, err	= ms.handler.HandleCoils(&CoilsRequest{
-				ClientAddr:	clientAddr,
-				UnitId:		req.unitId,
-				Addr:		addr,
-				Quantity:	1, // request for a single coil
-				IsWrite:	true, // this is a write request
-				Args:		[]bool{(req.payload[2] == 0xff)},
+				ClientAddr: clientAddr,
+				ClientRole: clientRole,
+				UnitId:     req.unitId,
+				Addr:       addr,
+				Quantity:   1, // request for a single coil
+				IsWrite:    true, // this is a write request
+				Args:       []bool{(req.payload[2] == 0xff)},
 			})
 
 			if err != nil {
@@ -464,12 +546,13 @@ func (ms *ModbusServer) handleTransport(t transport, clientAddr string) {
 
 			// invoke the coil handler
 			_, err	= ms.handler.HandleCoils(&CoilsRequest{
-				ClientAddr:	clientAddr,
-				UnitId:		req.unitId,
-				Addr:		addr,
-				Quantity:	quantity,
-				IsWrite:	true, // this is a write request
-				Args:		decodeBools(quantity, req.payload[5:]),
+				ClientAddr: clientAddr,
+				ClientRole: clientRole,
+				UnitId:     req.unitId,
+				Addr:       addr,
+				Quantity:   quantity,
+				IsWrite:    true, // this is a write request
+				Args:       decodeBools(quantity, req.payload[5:]),
 			})
 
 			if err != nil {
@@ -516,20 +599,22 @@ func (ms *ModbusServer) handleTransport(t transport, clientAddr string) {
 			if req.functionCode == fcReadHoldingRegisters {
 				regs, err	= ms.handler.HandleHoldingRegisters(
 					&HoldingRegistersRequest{
-						ClientAddr:	clientAddr,
-						UnitId:		req.unitId,
-						Addr:		addr,
-						Quantity:	quantity,
-						IsWrite:	false,
-						Args:		nil,
+						ClientAddr: clientAddr,
+						ClientRole: clientRole,
+						UnitId:     req.unitId,
+						Addr:       addr,
+						Quantity:   quantity,
+						IsWrite:    false,
+						Args:       nil,
 					})
 			} else {
 				regs, err	= ms.handler.HandleInputRegisters(
 					&InputRegistersRequest{
-						ClientAddr:	clientAddr,
-						UnitId:		req.unitId,
-						Addr:		addr,
-						Quantity:	quantity,
+						ClientAddr: clientAddr,
+						ClientRole: clientRole,
+						UnitId:     req.unitId,
+						Addr:       addr,
+						Quantity:   quantity,
 					})
 			}
 			resCount	= len(regs)
@@ -575,12 +660,13 @@ func (ms *ModbusServer) handleTransport(t transport, clientAddr string) {
 			// invoke the handler
 			_, err	= ms.handler.HandleHoldingRegisters(
 				&HoldingRegistersRequest{
-					ClientAddr:	clientAddr,
-					UnitId:		req.unitId,
-					Addr:		addr,
-					Quantity:	1, // request for a single register
-					IsWrite:	true, // request is a write
-					Args:		[]uint16{value},
+					ClientAddr: clientAddr,
+					ClientRole: clientRole,
+					UnitId:     req.unitId,
+					Addr:       addr,
+					Quantity:   1, // request for a single register
+					IsWrite:    true, // request is a write
+					Args:       []uint16{value},
 				})
 
 			if err != nil {
@@ -639,12 +725,13 @@ func (ms *ModbusServer) handleTransport(t transport, clientAddr string) {
 			// invoke the holding register handler
 			_, err		= ms.handler.HandleHoldingRegisters(
 				&HoldingRegistersRequest{
-					ClientAddr:	clientAddr,
-					UnitId:		req.unitId,
-					Addr:		addr,
-					Quantity:	quantity,
-					IsWrite:	true, // this is a write request
-					Args:		bytesToUint16s(BIG_ENDIAN, req.payload[5:]),
+					ClientAddr: clientAddr,
+					ClientRole: clientRole,
+					UnitId:     req.unitId,
+					Addr:       addr,
+					Quantity:   quantity,
+					IsWrite:    true, // this is a write request
+					Args:       bytesToUint16s(BIG_ENDIAN, req.payload[5:]),
 				})
 			if err != nil {
 				break
@@ -713,5 +800,96 @@ func (ms *ModbusServer) handleTransport(t transport, clientAddr string) {
 	}
 
 	// never reached
+	return
+}
+
+// startTLS performs a full TLS handshake (with client authentication) on tcpSock
+// and returns a 'wrapped' clear-text socket suitable for use by the TCP transport.
+func (ms *ModbusServer) startTLS(tcpSock net.Conn) (
+	tlsSock *tls.Conn, clientRole string, err error) {
+	var connState  tls.ConnectionState
+
+	// set a 30s timeout for the TLS handshake to complete
+	err = tcpSock.SetDeadline(time.Now().Add(30 * time.Second))
+	if err != nil {
+		return
+	}
+
+	// start TLS negotiation over the raw TCP connection
+	tlsSock = tls.Server(tcpSock, &tls.Config{
+		Certificates: []tls.Certificate{
+			*ms.conf.TLSServerCert,
+		},
+		ClientCAs:    ms.conf.TLSClientCAs,
+		// require a valid (verified) certificate from the client
+		// (see R-06, R-08 and R-10 of the MBAPS spec)
+		ClientAuth:   tls.RequireAndVerifyClientCert,
+		// mandate TLSv1.2 or higher (see R-01 of the MBAPS spec)
+		MinVersion:   tls.VersionTLS12,
+	})
+
+	// complete the full TLS handshake (with client cert validation)
+	err = tlsSock.Handshake()
+	if err != nil {
+		return
+	}
+
+	// look for and extract the client's role, if any
+	connState = tlsSock.ConnectionState()
+	if len(connState.PeerCertificates) == 0 {
+		err = errors.New("no client certificate received")
+		return
+	}
+	// From the tls.ConnectionState doc:
+	// "The first element is the leaf certificate that the connection is
+	// verified against."
+	clientRole = ms.extractRole(connState.PeerCertificates[0])
+
+	return
+}
+
+// extractRole looks for Modbus Role extensions in a certificate and returns the
+// role as a string.
+// If no role extension is found, a nil string is returned (R-23).
+// If multiple or invalid role extensions are found, a nil string is returned (R-65, R-22).
+func (ms *ModbusServer) extractRole(cert *x509.Certificate) (role string) {
+	var err     error
+	var found   bool
+	var badCert bool
+
+	// walk through all extensions looking for Modbus Role OIDs
+	for _, ext := range cert.Extensions {
+		if ext.Id.Equal(modbusRoleOID) {
+
+			// there must be only one role extension per cert (R-65)
+			if found {
+				ms.logger.Warning("client certificate contains more than one role OIDs")
+				badCert = true
+				break
+			}
+			found = true
+
+			// the role extension must use UTF8String encoding (R-22)
+			// (the ASN1 tag for UTF8String is 0x0c)
+			if len(ext.Value) < 2 || ext.Value[0] != 0x0c {
+				badCert = true
+				break
+			}
+
+			// extract the ASN1 string
+			_, err = asn1.Unmarshal(ext.Value, &role)
+			if err != nil {
+				ms.logger.Warningf("failed to decode Modbus Role extension: %v", err)
+				badCert = true
+				break
+			}
+		}
+	}
+
+	// blank the role if we found more than one Role extension
+	if badCert {
+		role = ""
+	}
+
 	return
 }

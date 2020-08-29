@@ -10,11 +10,13 @@ Both client and server components are available.
 The client supports the following modes:
 - modbus RTU (serial, over both RS-232 and RS-485),
 - modbus TCP (a.k.a. MBAP),
-- modbus TCP over TLS (a.k.a. MBAPS),
+- modbus TCP over TLS (a.k.a. MBAPS or Modbus Security),
 - modbus RTU over TCP (RTU tunneled in TCP for use with e.g. remote serial
   ports or cheap TCP to serial bridges).
 
-The server is TCP-only for now.
+The server supports:
+- modbus TCP (a.k.a. MBAP),
+- modbus TCP over TLS (a.k.a. MBAPS or Modbus Security).
 
 A CLI client is available in cmd/modbus-cli.go and can be built with
 ```bash
@@ -114,7 +116,9 @@ func main() {
 }
 ```
 ### Using the server component
-See [examples/tcp_server.go](examples/tcp_server.go) for an example.
+See:
+* [examples/tcp_server.go](examples/tcp_server.go) for a modbus TCP example
+* [examples/tls_server.go](examples/tls_server.go) for TLS and Modbus Security features
 
 ### Supported function codes, golang object types and endianness/word ordering
 Function codes:

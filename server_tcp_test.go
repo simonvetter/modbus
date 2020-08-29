@@ -5,16 +5,16 @@ import (
 	"time"
 )
 
-func TestServerWithConcurrentConnections(t *testing.T) {
+func TestTCPServerWithConcurrentConnections(t *testing.T) {
 	var server *ModbusServer
 	var err	   error
 	var coils  []bool
 	var c1	   *ModbusClient
 	var c2	   *ModbusClient
 	var c3	   *ModbusClient
-	var th	   *testHandler
+	var th	   *tcpTestHandler
 
-	th = &testHandler{}
+	th = &tcpTestHandler{}
 
 	server, err = NewServer(&ServerConfiguration{
 		URL:		"tcp://localhost:5502",
@@ -180,15 +180,15 @@ func TestServerWithConcurrentConnections(t *testing.T) {
 	return
 }
 
-func TestServerCoilsAndDiscreteInputs(t *testing.T) {
+func TestTCPServerCoilsAndDiscreteInputs(t *testing.T) {
 	var server *ModbusServer
 	var err	   error
 	var coils  []bool
 	var dis	   []bool
 	var client *ModbusClient
-	var th	   *testHandler
+	var th	   *tcpTestHandler
 
-	th = &testHandler{}
+	th = &tcpTestHandler{}
 
 	server, err = NewServer(&ServerConfiguration{
 		URL:		"tcp://localhost:5504",
@@ -348,14 +348,14 @@ func TestServerCoilsAndDiscreteInputs(t *testing.T) {
 	return
 }
 
-func TestServerHoldingAndInputRegisters(t *testing.T) {
+func TestTCPServerHoldingAndInputRegisters(t *testing.T) {
 	var server *ModbusServer
 	var err	   error
 	var client *ModbusClient
-	var th	   *testHandler
+	var th	   *tcpTestHandler
 	var regs   []uint16
 
-	th = &testHandler{}
+	th = &tcpTestHandler{}
 
 	server, err = NewServer(&ServerConfiguration{
 		URL:		"tcp://localhost:5504",
@@ -552,14 +552,14 @@ func TestServerHoldingAndInputRegisters(t *testing.T) {
 	return
 }
 
-type testHandler struct {
+type tcpTestHandler struct {
 	coils	[10]bool
 	di	[10]bool
 	input	[10]uint16
 	holding	[10]uint16
 }
 
-func (th *testHandler) HandleCoils(req *CoilsRequest) (res []bool, err error) {
+func (th *tcpTestHandler) HandleCoils(req *CoilsRequest) (res []bool, err error) {
 	if req.UnitId != 9 {
 		// only reply to unit ID #9
 		err	= ErrIllegalFunction
@@ -581,7 +581,7 @@ func (th *testHandler) HandleCoils(req *CoilsRequest) (res []bool, err error) {
 	return
 }
 
-func (th *testHandler) HandleDiscreteInputs(req *DiscreteInputsRequest) (res []bool, err error) {
+func (th *tcpTestHandler) HandleDiscreteInputs(req *DiscreteInputsRequest) (res []bool, err error) {
 	if req.UnitId != 9 {
 		// only reply to unit ID #9
 		err	= ErrIllegalFunction
@@ -600,7 +600,7 @@ func (th *testHandler) HandleDiscreteInputs(req *DiscreteInputsRequest) (res []b
 	return
 }
 
-func (th *testHandler) HandleHoldingRegisters(req *HoldingRegistersRequest) (res []uint16, err error) {
+func (th *tcpTestHandler) HandleHoldingRegisters(req *HoldingRegistersRequest) (res []uint16, err error) {
 	if req.UnitId != 9 {
 		// only reply to unit ID #9
 		err	= ErrIllegalFunction
@@ -622,7 +622,7 @@ func (th *testHandler) HandleHoldingRegisters(req *HoldingRegistersRequest) (res
 	return
 }
 
-func (th *testHandler) HandleInputRegisters(req *InputRegistersRequest) (res []uint16, err error) {
+func (th *tcpTestHandler) HandleInputRegisters(req *InputRegistersRequest) (res []uint16, err error) {
 	if req.UnitId != 9 {
 		// only reply to unit ID #9
 		err	= ErrIllegalFunction
