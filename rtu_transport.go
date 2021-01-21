@@ -11,10 +11,12 @@ const (
 )
 
 type rtuTransport struct {
-	logger		*logger
-	link		rtuLink
-	timeout		time.Duration
-	speed		uint
+	logger       *logger
+	link         rtuLink
+	timeout      time.Duration
+	lastActivity time.Time
+	t35          time.Duration
+	t1           time.Duration
 }
 
 type rtuLink interface {
@@ -27,10 +29,19 @@ type rtuLink interface {
 // Returns a new RTU transport.
 func newRTUTransport(link rtuLink, addr string, speed uint, timeout time.Duration) (rt *rtuTransport) {
 	rt = &rtuTransport{
-		logger:		newLogger(fmt.Sprintf("rtu-transport(%s)", addr)),
-		link:		link,
-		timeout:	timeout,
-		speed:		speed,
+		logger:  newLogger(fmt.Sprintf("rtu-transport(%s)", addr)),
+		link:    link,
+		timeout: timeout,
+		t1:      serialCharTime(speed),
+	}
+
+	if speed >= 19200 {
+		// for baud rates equal to or greater than 19200 bauds, a fixed value of
+		// 1750 uS is specified for t3.5.
+		rt.t35 = 1750 * time.Microsecond
+	} else {
+		// for lower baud rates, the inter-frame delay should be 3.5 character times
+		rt.t35 = (serialCharTime(speed) * 35) / 10
 	}
 
 	return
@@ -45,24 +56,52 @@ func (rt *rtuTransport) Close() (err error) {
 
 // Runs a request across the rtu link and returns a response.
 func (rt *rtuTransport) ExecuteRequest(req *pdu) (res *pdu, err error) {
+	var ts time.Time
+	var t  time.Duration
+	var n  int
+
 	// set an i/o deadline on the link
 	err	= rt.link.SetDeadline(time.Now().Add(rt.timeout))
 	if err != nil {
 		return
 	}
 
+	// if the line was active less than 3.5 char times ago,
+	// let t3.5 expire before transmitting
+	t = time.Since(rt.lastActivity.Add(rt.t35))
+	if t < 0 {
+		time.Sleep(t * (-1))
+	}
+
+	ts = time.Now()
+
 	// build an RTU ADU out of the request object and
 	// send the final ADU+CRC on the wire
-	_, err	= rt.link.Write(rt.assembleRTUFrame(req))
+	n, err	= rt.link.Write(rt.assembleRTUFrame(req))
 	if err != nil {
 		return
 	}
 
+	// estimate how long the serial line was busy for.
+	// note that on most platforms, Write() will be buffered and return
+	// immediately rather than block until the buffer is drained
+	rt.lastActivity = ts.Add(time.Duration(n) * rt.t1)
+
 	// observe inter-frame delays
-	time.Sleep(rt.interFrameDelay())
+	time.Sleep(rt.lastActivity.Add(rt.t35).Sub(time.Now()))
 
 	// read the response back from the wire
 	res, err = rt.readRTUFrame()
+
+	if err == ErrBadCRC || err == ErrProtocolError || err == ErrShortFrame {
+		// flush any data off the link to allow devices to re-sync
+		discard(rt.link)
+	}
+
+	// mark the time if we heard anything back
+	if err != ErrRequestTimedOut {
+		rt.lastActivity = time.Now()
+	}
 
 	return
 }
@@ -77,29 +116,16 @@ func (rt *rtuTransport) ReadRequest() (req *pdu, err error) {
 
 // Writes a response to the rtu link.
 func (rt *rtuTransport) WriteResponse(res *pdu) (err error) {
+	var n int
+
 	// build an RTU ADU out of the request object and
 	// send the final ADU+CRC on the wire
-	_, err	= rt.link.Write(rt.assembleRTUFrame(res))
+	n, err	= rt.link.Write(rt.assembleRTUFrame(res))
 	if err != nil {
 		return
 	}
 
-	// observe inter-frame delays
-	time.Sleep(rt.interFrameDelay())
-
-	return
-}
-
-// Returns the inter-frame gap duration.
-func (rt *rtuTransport) interFrameDelay() (delay time.Duration) {
-	if rt.speed == 0 || rt.speed >= 19200 {
-		// for baud rates equal to or greater than 19200 bauds, a fixed
-		// inter-frame delay of 1750 uS is specified.
-		delay = 1750 * time.Microsecond
-	} else {
-		// for lower baud rates, the inter-frame delay should be 3.5 character times
-		delay = time.Duration(38500000 / rt.speed) * time.Microsecond
-	}
+	rt.lastActivity = time.Now().Add(rt.t1 * time.Duration(n))
 
 	return
 }
@@ -218,9 +244,22 @@ func expectedResponseLenth(responseCode uint8, responseLength uint8) (byteCount 
 // Note that on a serial line, this call may block for up to serialConf.Timeout
 // i.e. 10ms.
 func discard(link rtuLink) {
-	var rxbuf	= make([]byte, 1024)
+	var rxbuf = make([]byte, 1024)
 
 	link.SetDeadline(time.Now().Add(time.Millisecond))
 	link.Read(rxbuf)
+	return
+}
+
+// Returns how long it takes to send 1 byte on a serial line at the
+// specified baud rate.
+func serialCharTime(rate_bps uint) (ct time.Duration) {
+	// note: an RTU byte on the wire is:
+	// - 1 start bit,
+	// - 8 data bits,
+	// - 1 parity or stop bit
+	// - 1 stop bit
+	ct = (11) * time.Second / time.Duration(rate_bps)
+
 	return
 }

@@ -163,3 +163,27 @@ func feedTestPipe(t *testing.T, in chan []byte, out io.WriteCloser) {
 
 	return
 }
+
+func TestModbusRTUSerialCharTime(t *testing.T) {
+	var d time.Duration
+
+	d = serialCharTime(38400)
+	// expect 11 bits at 38400bps: 11 * (1/38400) = 286.458uS
+	if d != time.Duration(286458) * time.Nanosecond {
+		t.Errorf("unexpected serial char duration: %v", d)
+	}
+
+	d = serialCharTime(19200)
+	// expect 11 bits at 19200bps: 11 * (1/19200) = 572.916uS
+	if d != time.Duration(572916) * time.Nanosecond {
+		t.Errorf("unexpected serial char duration: %v", d)
+	}
+
+	d = serialCharTime(9600)
+	// expect 11 bits at 9600bps: 11 * (1/9600) = 1.145833ms
+	if d != time.Duration(1145833) * time.Nanosecond {
+		t.Errorf("unexpected serial char duration: %v", d)
+	}
+
+	return
+}

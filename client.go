@@ -114,6 +114,10 @@ func NewClient(conf *ClientConfiguration) (mc *ModbusClient, err error) {
 		mc.transportType	= modbusRTU
 
 	case "rtuovertcp":
+		if mc.conf.Speed == 0 {
+			mc.conf.Speed	= 9600
+		}
+
 		if mc.conf.Timeout == 0 {
 			mc.conf.Timeout = 1 * time.Second
 		}
