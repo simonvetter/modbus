@@ -35,8 +35,8 @@ func main() {
 	var unitId        uint
 	var runList       []operation
 
-	flag.StringVar(&target, "target", "rtu:///dev/ttyUSB0", "target device to connect to (e.g. tcp://somehost:502) [required]")
-	flag.UintVar(&speed, "speed", 9600, "serial bus speed in bps (rtu)")
+	flag.StringVar(&target, "target", "", "target device to connect to (e.g. tcp://somehost:502) [required]")
+	flag.UintVar(&speed, "speed", 19200, "serial bus speed in bps (rtu)")
 	flag.UintVar(&dataBits, "data-bits", 8, "number of bits per character on the serial bus (rtu)")
 	flag.StringVar(&parity, "parity", "none", "parity bit <none|even|odd> on the serial bus (rtu)")
 	flag.UintVar(&stopBits, "stop-bits", 2, "number of stop bits <0|1|2>) on the serial bus (rtu)")
@@ -53,6 +53,11 @@ func main() {
 	if help {
 		displayHelp()
 		os.Exit(0)
+	}
+
+	if target == "" {
+		fmt.Printf("no target specified, please use --target\n")
+		os.Exit(1)
 	}
 
 	// create and populate the client configuration object
@@ -150,7 +155,7 @@ func main() {
 		     "rdi", "readDiscreteInput", "readDiscreteInputs":
 
 			if len(splitArgs) != 2 {
-				fmt.Printf("need exactly 1 arguments after rc/rdi, got %v\n",
+				fmt.Printf("need exactly 1 argument after rc/rdi, got %v\n",
 					   len(splitArgs) - 1)
 				os.Exit(2)
 			}
@@ -285,7 +290,7 @@ func main() {
 
 		case "sleep":
 			if len(splitArgs) != 2 {
-				fmt.Printf("need exactly 1 arguments after sleep, got %v\n",
+				fmt.Printf("need exactly 1 argument after sleep, got %v\n",
 					   len(splitArgs) - 1)
 				os.Exit(2)
 			}
@@ -299,7 +304,7 @@ func main() {
 
 		case "suid", "setUnitId", "sid":
 			if len(splitArgs) != 2 {
-				fmt.Printf("need exactly 1 arguments after setUnitId, got %v\n",
+				fmt.Printf("need exactly 1 argument after setUnitId, got %v\n",
 					   len(splitArgs) - 1)
 				os.Exit(2)
 			}
@@ -313,7 +318,7 @@ func main() {
 
 		case "repeat":
 			if len(splitArgs) != 1 {
-				fmt.Printf("repeat takes no argument, got %v\n",
+				fmt.Printf("repeat takes no arguments, got %v\n",
 					   len(splitArgs) - 1)
 				os.Exit(2)
 			}
@@ -322,7 +327,7 @@ func main() {
 
 		case "date":
 			if len(splitArgs) != 1 {
-				fmt.Printf("date takes no argument, got %v\n",
+				fmt.Printf("date takes no arguments, got %v\n",
 					   len(splitArgs) - 1)
 			os.Exit(2)
 		   }
@@ -331,7 +336,7 @@ func main() {
 
 		case "scan":
 			if len(splitArgs) != 2 {
-				fmt.Printf("need exactly 1 arguments after scan, got %v\n",
+				fmt.Printf("need exactly 1 argument after scan, got %v\n",
 					   len(splitArgs) - 1)
 				os.Exit(2)
 			}
@@ -353,6 +358,33 @@ func main() {
 				fmt.Printf("unknown register type '%v' (valid options <coils|di|hr|ir>\n",
 					   splitArgs[1])
 				os.Exit(2)
+			}
+
+		case "ping":
+			if len(splitArgs) < 2 || len(splitArgs) > 3 {
+				fmt.Printf("need 1 or 2 arguments after ping, got %v\n",
+					   len(splitArgs) - 1)
+				os.Exit(2)
+			}
+
+			o.op            = ping
+			o.quantity, err = parseUint16(splitArgs[1])
+			if err != nil {
+				fmt.Printf("failed to parse ping count ('%v'): %v\n", splitArgs[1], err)
+				os.Exit(2)
+			}
+
+			if o.quantity == 0 {
+				fmt.Printf("illegal ping count value (must be >= 1)\n")
+				os.Exit(2)
+			}
+
+			if len(splitArgs) == 3 {
+				o.duration, err	= time.ParseDuration(splitArgs[2])
+				if err != nil {
+					fmt.Printf("failed to parse '%s' as duration: %v\n", splitArgs[2], err)
+					os.Exit(2)
+				}
 			}
 
 		default:
@@ -639,6 +671,9 @@ func main() {
 		case scanRegisters:
 			performRegisterScan(client, o.isHoldingReg)
 
+		case ping:
+			performPing(client, o.quantity, o.duration);
+
 		default:
 			fmt.Printf("unknown operation %v\n", o)
 			os.Exit(100)
@@ -674,6 +709,7 @@ const (
 	date
 	scanBools
 	scanRegisters
+	ping
 )
 
 type operation struct {
@@ -892,6 +928,75 @@ func performRegisterScan(client *modbus.ModbusClient, isHoldingReg bool) {
 	return
 }
 
+func performPing(client *modbus.ModbusClient, count uint16, interval time.Duration) {
+	var err           error
+	var okCount       uint
+	var timeoutCount  uint
+	var otherErrCount uint
+	var startTs       time.Time
+	var ts            time.Time
+	var rtt           time.Duration
+	var minRTT        time.Duration
+	var maxRTT        time.Duration
+	var avgRTT        time.Duration
+
+	fmt.Printf("ping: sending %v requests...\n", count)
+
+	startTs = time.Now()
+
+	for run := uint16(0); run < count; run++ {
+		ts     = time.Now()
+		_, err = client.ReadRegister(0x0000, modbus.HOLDING_REGISTER)
+
+		rtt    = time.Since(ts)
+		avgRTT += rtt
+
+		if run == 0 || rtt < minRTT {
+			minRTT = rtt
+		}
+
+		if rtt > maxRTT {
+			maxRTT = rtt
+		}
+
+		switch err {
+		// mask illegal data address and illegal function errors since we
+		// only care about getting a response from the target device
+		// (on which holding reg #0 may or may not exist)
+		case nil, modbus.ErrIllegalDataAddress, modbus.ErrIllegalFunction:
+			okCount++
+			fmt.Printf("ok: seq = %v, time: %v\n",
+				run + 1, rtt.Round(time.Microsecond))
+
+		case modbus.ErrRequestTimedOut, modbus.ErrGWTargetFailedToRespond:
+			timeoutCount++
+			fmt.Printf("timeout (%v): seq = %v, time: %v\n",
+				err, run + 1, rtt.Round(time.Microsecond))
+
+		default:
+			otherErrCount++
+			fmt.Printf("error (%v): seq = %v, time: %v\n",
+				err, run + 1, rtt.Round(time.Microsecond))
+		}
+
+		if interval > 0 {
+			time.Sleep(interval)
+		}
+	}
+
+	fmt.Printf("--- ping statistics ---\n" +
+		"%v queries, %v target replies, %v transmission errors, %v timeouts, time: %v\n",
+		count, okCount, otherErrCount, timeoutCount,
+		time.Since(startTs).Round(time.Millisecond))
+
+	fmt.Printf("rtt min/avg/max = %v/%v/%v\n",
+		minRTT.Round(time.Microsecond),
+		(avgRTT / time.Duration(count)).Round(time.Microsecond),
+		maxRTT.Round(time.Microsecond))
+
+	return
+}
+
 func displayHelp() {
 	fmt.Println(
 `
@@ -935,16 +1040,16 @@ Available commands:
   - float64: 64-bit floating point number (4 contiguous modbus registers).
 
   rh:int16:0x300+1 	reads 2 consecutive 16-bit signed integers at addresses 0x300 and 0x301
-  rh:uint32:20		reads a 32-bit unsigned integer at adresses 20-21 (2 modbus registers)
-  rh:float32:500+10	reads 11 32-bit floating point numbers at adresses 500-521
+  rh:uint32:20		reads a 32-bit unsigned integer at addresses 20-21 (2 modbus registers)
+  rh:float32:500+10	reads 11 32-bit floating point numbers at addresses 500-521
 			(11 * 32bit make for 22 16-bit contiguous modbus registers)
 
 * <ri:readInputRegisters>:<type>:<addr>[+additional quanitity]
   Read input registers at address <addr>, plus any additional registers if specified, decoded
   in the same way as explained above.
 
-  ri:uint16:0x300+1	reads 2 consecutive 16-bit unsigned integers at adresses 0x300 and 0x301
-  ri:int32:20		reads a 32-bit signed integer at adresses 20-21 (2 modbus registers)
+  ri:uint16:0x300+1	reads 2 consecutive 16-bit unsigned integers at addresses 0x300 and 0x301
+  ri:int32:20		reads a 32-bit signed integer at addresses 20-21 (2 modbus registers)
 
 * <wc|writeCoil>:<addr>:<value>
   Set the coil at address <addr> to either true or false, depending on <value>.
@@ -977,7 +1082,7 @@ Available commands:
 * repeat
   Restart execution of the given commands.
 
-  rh:uint32:100 sleep:1s repeat   reads a 32-bit unsigned integer at adresses 100-101 and
+  rh:uint32:100 sleep:1s repeat   reads a 32-bit unsigned integer at addresses 100-101 and
 				  pauses for one second, forever in a loop.
 
 * date
@@ -993,10 +1098,15 @@ Available commands:
   scan:hr	scans the device for holding registers.
   scan:di	scans the device for discrete inputs.
 
-  Read requests are made over the entire adress space (65535 adresses).
+  Read requests are made over the entire address space (65535 addresses).
   Adresses for which a non-error response is received are listed, along with the value received.
   Errors other than Illegal Data Address and Illegal Function are also shown, as they should
   not happen in sane implementations.
+
+* ping:<count>[:interval]
+  Executes <count> modbus reads (1 holding register at address 0x0000), either back to back or
+  separated by [interval] if specified, then prints timing and outcome statistics.
+  This command can be used to troubleshoot network or serial connections.
 
 Register endianness and word order:
   The endianness of holding/input registers can be specified with --endianness <big|little> and
@@ -1014,7 +1124,7 @@ Examples:
   $ modbus-cli --target rtu:///dev/ttyUSB0 --speed 19200 suid:2 rh:uint16:0+7 \
     wr:uint16:0x2:0x0605 suid:3 ri:int16:0+1 sleep:1s repeat
   Open serial port /dev/ttyUSB0 at a speed of 19200 bps and repeat forever:
-    select unit id (slave id) 2, read holding registers at adresses 0-7 as 16 bit unsigned
+    select unit id (slave id) 2, read holding registers at addresses 0-7 as 16 bit unsigned
     integers, write 0x605 as a 16-bit unsigned integer at address 2,
     change for unit id 3, read input registers 0-1 as 16-bit signed integers,
     pause for 1s.
