@@ -50,7 +50,7 @@ func main() {
     // for an RTU (serial) device/bus
     client, err = modbus.NewClient(&modbus.ClientConfiguration{
         URL:      "rtu:///dev/ttyUSB0",
-        Speed:    9600,                    // default
+        Speed:    19200,                   // default
         DataBits: 8,                       // default, optional
         Parity:   modbus.PARITY_NONE,      // default, optional
         StopBits: 2,                       // default if no parity, optional
@@ -61,6 +61,7 @@ func main() {
     // simple TCP-to-serial bridge)
     client, err = modbus.NewClient(&modbus.ClientConfiguration{
         URL:      "rtuovertcp://hostname-or-ip-address:502",
+        Speed:    19200,                   // serial link speed
         Timeout:  1 * time.Second,
     })
 

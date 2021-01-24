@@ -86,7 +86,7 @@ func NewClient(conf *ClientConfiguration) (mc *ModbusClient, err error) {
 	case "rtu":
 		// set useful defaults
 		if mc.conf.Speed == 0 {
-			mc.conf.Speed	= 9600
+			mc.conf.Speed	= 19200
 		}
 
 		// note: the "modbus over serial line v1.02" document specifies an
@@ -115,7 +115,7 @@ func NewClient(conf *ClientConfiguration) (mc *ModbusClient, err error) {
 
 	case "rtuovertcp":
 		if mc.conf.Speed == 0 {
-			mc.conf.Speed	= 9600
+			mc.conf.Speed	= 19200
 		}
 
 		if mc.conf.Timeout == 0 {
