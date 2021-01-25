@@ -4,6 +4,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
+	"os"
 	"net"
 	"time"
 	"strings"
@@ -1042,6 +1043,10 @@ func (mc *ModbusClient) executeRequest(req *pdu) (res *pdu, err error) {
 	// send the request over the wire, wait for and decode the response
 	res, err	= mc.transport.ExecuteRequest(req)
 	if err != nil {
+		// map i/o timeouts to ErrRequestTimedOut
+		if os.IsTimeout(err) {
+			err = ErrRequestTimedOut
+		}
 		return
 	}
 
