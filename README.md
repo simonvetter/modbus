@@ -103,18 +103,22 @@ func main() {
     var reg16s  []uint16
     reg16s, err = client.ReadRegisters(100, 4, modbus.INPUT_REGISTER)
 
-    // read the same 4 consecutive 16-bit input registers as 2 32-bit registers
+    // read the same 4 consecutive 16-bit input registers as 2 32-bit integers
     var reg32s  []uint32
     reg32s, err = client.ReadUint32s(100, 2, modbus.INPUT_REGISTER)
 
-    // read the same 4 consecutive 16-bit registers as a single 64-bit register
-    var reg64	uint64
-    reg64, err	= client.ReadUint64(100, modbus.INPUT_REGISTER)
+    // read the same 4 consecutive 16-bit registers as a single 64-bit integer
+    var reg64   uint64
+    reg64, err  = client.ReadUint64(100, modbus.INPUT_REGISTER)
 
-    // by default, 16-bit registers are decoded as big-endian and 32-bit registers
-    // as big-endian with the high word first.
+    // read the same 4 consecutive 16-bit registers as a slice of bytes
+    var regBs   []byte
+    regBs, err  = client.ReadBytes(100, 8, modbus.INPUT_REGISTER)
+
+    // by default, 16-bit integers are decoded as big-endian and 32/64-bit values as
+    // big-endian with the high word first.
     // change the byte/word ordering of subsequent requests to little endian, with
-    // the low word first (note that the second argument only affects 32-bit registers)
+    // the low word first (note that the second argument only affects 32/64-bit values)
     client.SetEncoding(modbus.LITTLE_ENDIAN, modbus.LOW_WORD_FIRST)
 
     // read the same 4 consecutive 16-bit input registers as 2 32-bit floats
@@ -130,9 +134,16 @@ func main() {
 
     // write 3 floats to registers 100 to 105
     err         = client.WriteFloat32s(100, []float32{
-	3.14,
+        3.14,
         1.1,
-	-783.22,
+        -783.22,
+    })
+
+    // write 0x0102030405060708 to 16-bit (holding) registers 10 through 13
+    // (8 bytes i.e. 4 consecutive modbus registers)
+    err         = client.WriteBytes(10, []byte{
+        0x01, 0x02, 0x03, 0x04,
+        0x05, 0x06, 0x07, 0x08,
     })
 
     // close the TCP connection/serial port
@@ -157,6 +168,7 @@ Function codes:
 
 Go object types:
 * Booleans (coils and discrete inputs)
+* Bytes (input and holding registers)
 * Signed/Unisgned 16-bit integers (input and holding registers)
 * Signed/Unsigned 32-bit integers (input and holding registers)
 * 32-bit floating point numbers (input and holding registers)
@@ -164,7 +176,7 @@ Go object types:
 * 64-bit floating point numbers (input and holding registers)
 
 Byte encoding/endianness/word ordering:
-* Little and Big endian for 16-bit integers
+* Little and Big endian for byte slices and 16-bit integers
 * Little and Big endian, with and without word swap for 32 and 64-bit
   integers and floating point numbers.
 

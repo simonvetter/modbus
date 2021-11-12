@@ -397,7 +397,7 @@ func (mc *ModbusClient) ReadDiscreteInput(addr uint16) (value bool, err error) {
 func (mc *ModbusClient) ReadRegisters(addr uint16, quantity uint16, regType RegType) (values []uint16, err error) {
 	var mbPayload	[]byte
 
-	// read 1 uint16 register, as bytes
+	// read quantity uint16 registers, as bytes
 	mbPayload, err	= mc.readRegisters(addr, quantity, regType)
 	if err != nil {
 		return
@@ -413,6 +413,7 @@ func (mc *ModbusClient) ReadRegisters(addr uint16, quantity uint16, regType RegT
 func (mc *ModbusClient) ReadRegister(addr uint16, regType RegType) (value uint16, err error) {
 	var values	[]uint16
 
+	// read 1 uint16 register, as bytes
 	values, err	= mc.ReadRegisters(addr, 1, regType)
 	if err == nil {
 		value = values[0]
@@ -529,6 +530,23 @@ func (mc *ModbusClient) ReadFloat64(addr uint16, regType RegType) (value float64
 	if err == nil {
 		value	= values[0]
 	}
+
+	return
+}
+
+// Reads one or multiple 16-bit registers (function code 03 or 04) as bytes.
+// A per-register byteswap is performed if endianness is set to LITTLE_ENDIAN.
+func (mc *ModbusClient) ReadBytes(addr uint16, quantity uint16, regType RegType) (values []byte, err error) {
+	values, err = mc.readBytes(addr, quantity, regType, true)
+
+	return
+}
+
+// Reads one or multiple 16-bit registers (function code 03 or 04) as bytes.
+// No byte or word reordering is performed: bytes are returned exactly as they come
+// off the wire, allowing the caller to handle encoding/endianness/word order manually.
+func (mc *ModbusClient) ReadRawBytes(addr uint16, quantity uint16, regType RegType) (values []byte, err error) {
+	values, err = mc.readBytes(addr, quantity, regType, false)
 
 	return
 }
@@ -826,7 +844,75 @@ func (mc *ModbusClient) WriteFloat64(addr uint16, value float64) (err error) {
 	return
 }
 
+// Writes the given slice of bytes to 16-bit registers starting at addr.
+// A per-register byteswap is performed if endianness is set to LITTLE_ENDIAN.
+// Odd byte quantities are padded with a null byte to fall on 16-bit register boundaries.
+func (mc *ModbusClient) WriteBytes(addr uint16, values []byte) (err error) {
+	err = mc.writeBytes(addr, values, true)
+
+	return
+}
+
+// Writes the given slice of bytes to 16-bit registers starting at addr.
+// No byte or word reordering is performed: bytes are pushed to the wire as-is,
+// allowing the caller to handle encoding/endianness/word order manually.
+// Odd byte quantities are padded with a null byte to fall on 16-bit register boundaries.
+func (mc *ModbusClient) WriteRawBytes(addr uint16, values []byte) (err error) {
+	err = mc.writeBytes(addr, values, false)
+
+	return
+}
+
 /*** unexported methods ***/
+// Reads one or multiple 16-bit registers (function code 03 or 04) as bytes.
+func (mc *ModbusClient) readBytes(addr uint16, quantity uint16, regType RegType, observeEndianness bool) (values []byte, err error) {
+	var regCount uint16
+
+	// read enough registers to get the requested number of bytes
+	// (2 bytes per reg)
+	regCount = (quantity / 2) + (quantity % 2)
+
+	values, err = mc.readRegisters(addr, regCount, regType)
+	if err != nil {
+		return
+	}
+
+	// swap bytes on register boundaries if requested by the caller
+	// and endianness is set to little endian
+	if observeEndianness && mc.endianness == LITTLE_ENDIAN {
+		for i := 0; i < len(values); i += 2 {
+			values[i], values[i+1] = values[i+1], values[i]
+		}
+	}
+
+	// pop the last byte on odd quantities
+	if quantity % 2 == 1 {
+		values = values[0:len(values) - 1]
+	}
+
+	return
+}
+
+// Writes the given slice of bytes to 16-bit registers starting at addr.
+func (mc *ModbusClient) writeBytes(addr uint16, values []byte, observeEndianness bool) (err error) {
+	// pad odd quantities to make for full registers
+	if len(values) % 2 == 1 {
+		values = append(values, 0x00)
+	}
+
+	// swap bytes on register boundaries if requested by the caller
+	// and endianness is set to little endian
+	if observeEndianness && mc.endianness == LITTLE_ENDIAN {
+		for i := 0; i < len(values); i += 2 {
+			values[i], values[i+1] = values[i+1], values[i]
+		}
+	}
+
+	err = mc.writeRegisters(addr, values)
+
+	return
+}
+
 // Reads and returns quantity booleans.
 // Digital inputs are read if di is true, otherwise coils are read.
 func (mc *ModbusClient) readBools(addr uint16, quantity uint16, di bool) (values []bool, err error) {
@@ -918,7 +1004,6 @@ func (mc *ModbusClient) readBools(addr uint16, quantity uint16, di bool) (values
 	return
 }
 
-
 // Reads and returns quantity registers of type regType, as bytes.
 func (mc *ModbusClient) readRegisters(addr uint16, quantity uint16, regType RegType) (bytes []byte, err error) {
 	var req		*pdu
@@ -1007,16 +1092,16 @@ func (mc *ModbusClient) readRegisters(addr uint16, quantity uint16, regType RegT
 // Writes multiple registers starting from base address addr.
 // Register values are passed as bytes, each value being exactly 2 bytes.
 func (mc *ModbusClient) writeRegisters(addr uint16, values []byte) (err error) {
-	var req			*pdu
-	var res			*pdu
-	var payloadLength	uint16
-	var quantity		uint16
+	var req           *pdu
+	var res           *pdu
+	var payloadLength uint16
+	var quantity      uint16
 
 	mc.lock.Lock()
 	defer mc.lock.Unlock()
 
-	payloadLength	= uint16(len(values))
-	quantity	= payloadLength / 2
+	payloadLength = uint16(len(values))
+	quantity      = payloadLength / 2
 
 	if quantity == 0 {
 		err = ErrUnexpectedParameters
