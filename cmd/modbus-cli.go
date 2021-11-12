@@ -2,6 +2,7 @@ package main
 
 import (
 	"crypto/tls"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"flag"
@@ -186,17 +187,18 @@ func main() {
 			}
 
 			switch splitArgs[1] {
-			case "uint16":	o.op	= readUint16
-			case "int16":	o.op	= readInt16
-			case "uint32":	o.op	= readUint32
-			case "int32":	o.op	= readInt32
-			case "float32":	o.op	= readFloat32
-			case "uint64":	o.op	= readUint64
-			case "int64":	o.op	= readInt64
-			case "float64":	o.op	= readFloat64
+			case "uint16":  o.op = readUint16
+			case "int16":   o.op = readInt16
+			case "uint32":  o.op = readUint32
+			case "int32":   o.op = readInt32
+			case "float32": o.op = readFloat32
+			case "uint64":  o.op = readUint64
+			case "int64":   o.op = readInt64
+			case "float64": o.op = readFloat64
+			case "bytes":   o.op = readBytes
 			default:
 				fmt.Printf("unknown register type '%v' (should be one of " +
-					   "[u]unt16, [u]int32, [u]int64, float32, float64)\n",
+					   "[u]unt16, [u]int32, [u]int64, float32, float64, bytes)\n",
 					   splitArgs[1])
 				os.Exit(2)
 			}
@@ -245,40 +247,49 @@ func main() {
 
 			switch splitArgs[1] {
 			case "uint16":
-				o.op		= writeUint16
-				o.u16, err	= parseUint16(splitArgs[3])
+				o.op         = writeUint16
+				o.u16, err   = parseUint16(splitArgs[3])
 
 			case "int16":
-				o.op		= writeInt16
-				o.u16, err	= parseInt16(splitArgs[3])
+				o.op         = writeInt16
+				o.u16, err   = parseInt16(splitArgs[3])
 
 			case "uint32":
-				o.op		= writeUint32
-				o.u32, err	= parseUint32(splitArgs[3])
+				o.op         = writeUint32
+				o.u32, err   = parseUint32(splitArgs[3])
 
 			case "int32":
-				o.op		= writeInt32
-				o.u32, err	= parseInt32(splitArgs[3])
+				o.op         = writeInt32
+				o.u32, err   = parseInt32(splitArgs[3])
 
 			case "float32":
-				o.op		= writeFloat32
-				o.f32, err	= parseFloat32(splitArgs[3])
+				o.op         = writeFloat32
+				o.f32, err   = parseFloat32(splitArgs[3])
 
 			case "uint64":
-				o.op		= writeUint64
-				o.u64, err	= parseUint64(splitArgs[3])
+				o.op         = writeUint64
+				o.u64, err   = parseUint64(splitArgs[3])
 
 			case "int64":
-				o.op		= writeInt64
-				o.u64, err	= parseInt64(splitArgs[3])
+				o.op         = writeInt64
+				o.u64, err   = parseInt64(splitArgs[3])
 
 			case "float64":
-				o.op		= writeFloat64
-				o.f64, err	= parseFloat64(splitArgs[3])
+				o.op         = writeFloat64
+				o.f64, err   = parseFloat64(splitArgs[3])
+
+			case "bytes":
+				o.op         = writeBytes
+				o.bytes, err = parseHexBytes(splitArgs[3])
+
+			case "string":
+				o.op         = writeBytes
+				o.bytes      = []byte(splitArgs[3])
+				err          = nil
 
 			default:
 				fmt.Printf("unknown register type '%v' (should be one of " +
-					   "[u]unt16, [u]int32, [u]int64, float32, float64)\n",
+					   "[u]unt16, [u]int32, [u]int64, float32, float64, bytes, string)\n",
 					   splitArgs[1])
 				os.Exit(2)
 			}
@@ -562,6 +573,33 @@ func main() {
 				}
 			}
 
+		case readBytes:
+			var res	[]byte
+
+			if o.isHoldingReg {
+				res, err = client.ReadBytes(o.addr, o.quantity + 1, modbus.HOLDING_REGISTER)
+			} else {
+				res, err = client.ReadBytes(o.addr, o.quantity + 1, modbus.INPUT_REGISTER)
+			}
+			if err != nil {
+				fmt.Printf("failed to read holding/input registers: %v\n", err)
+			} else {
+				for idx := range res {
+					if (idx % 16) == 0 {
+						fmt.Printf("0x%04x\t%-5v : ",
+							o.addr + (uint16(idx/2)), o.addr + (uint16(idx/2)))
+					}
+					fmt.Printf("%02x", res[idx])
+
+					if (idx % 16) == 15 || idx == len(res) - 1 {
+						fmt.Printf(" <%s>\n",
+							decodeString(res[(idx/16*16):(idx/16*16)+(idx%16)+1]))
+					} else if (idx % 16) == 7 {
+						fmt.Printf(" ")
+					}
+				}
+			}
+
 		case writeCoil:
 			err	= client.WriteCoil(o.addr, o.coil)
 			if err != nil {
@@ -652,6 +690,16 @@ func main() {
 					   o.f64, o.addr)
 			}
 
+		case writeBytes:
+			err = client.WriteBytes(o.addr, o.bytes)
+			if err != nil {
+				fmt.Printf("failed to write %v at address 0x%04x: %v\n",
+					o.bytes, o.addr, err)
+			} else {
+				fmt.Printf("wrote %v bytes at address 0x%04x\n",
+					len(o.bytes), o.addr)
+			}
+
 		case sleep:
 			time.Sleep(o.duration)
 
@@ -684,7 +732,7 @@ func main() {
 }
 
 const (
-	readBools		uint	= iota + 1
+	readBools      uint = iota + 1
 	readUint16
 	readInt16
 	readUint32
@@ -693,6 +741,7 @@ const (
 	readUint64
 	readInt64
 	readFloat64
+	readBytes
 	writeCoil
 	writeCoils
 	writeUint16
@@ -703,6 +752,7 @@ const (
 	writeInt64
 	writeUint64
 	writeFloat64
+	writeBytes
 	setUnitId
 	sleep
 	repeat
@@ -713,19 +763,20 @@ const (
 )
 
 type operation struct {
-	op		uint
-	addr		uint16
-	isCoil		bool
-	isHoldingReg	bool
-	quantity	uint16
-	coil		bool
-	u16		uint16
-	u32		uint32
-	f32		float32
-	u64		uint64
-	f64		float64
-	duration	time.Duration
-	unitId		uint8
+	op           uint
+	addr         uint16
+	isCoil       bool
+	isHoldingReg bool
+	quantity     uint16
+	coil         bool
+	u16          uint16
+	u32          uint32
+	f32          float32
+	u64          uint64
+	f64          float64
+	bytes        []byte
+	duration     time.Duration
+	unitId       uint8
 }
 
 func parseUint16(in string) (u16 uint16, err error) {
@@ -845,6 +896,12 @@ func parseUnitId(in string) (addr uint8, err error) {
 	if err == nil {
 		addr = uint8(val)
 	}
+
+	return
+}
+
+func parseHexBytes(in string) (out []byte, err error) {
+	out, err = hex.DecodeString(in)
 
 	return
 }
@@ -997,93 +1054,116 @@ func performPing(client *modbus.ModbusClient, count uint16, interval time.Durati
 	return
 }
 
+func decodeString(in []byte) (out string) {
+	var dec []byte
+	var b   byte
+
+	for idx := range in {
+		if in[idx] >= 0x20 && in[idx] <= 0x7e {
+			b = in[idx]
+		} else {
+			b = '.'
+		}
+
+		dec = append(dec, b)
+	}
+
+	out = string(dec)
+
+	return
+}
+
 func displayHelp() {
+	flag.CommandLine.SetOutput(os.Stdout)
+
 	fmt.Println(
-`
-This tool is a modbus command line interface client meant to allow quick and easy
-interaction with modbus devices (e.g. probing or troubleshooting).
+`This tool is a modbus command line interface client meant to allow quick and easy
+interaction with modbus devices (e.g. for probing or troubleshooting).
 
 Available options:`)
 	flag.PrintDefaults()
 	fmt.Printf(
 `
 
-Command strings must be given as trailing arguments after any options.
+Commands must be given as trailing arguments after any options.
 
 Example: modbus-cli --target=tcp://somehost:502 --timeout=3s rh:uint16:0x100+5 wc:12:true
-	 Read 6 holding registers at address 0x100 then set the coil at address 12 to true
-	 on modbus/tcp device somehost port 502, with a timeout of 3s.
+         Read 6 holding registers at address 0x100 then set the coil at address 12 to true
+         on modbus/tcp device somehost port 502, with a timeout of 3s.
 
 Available commands:
 * <rc|readCoils>:<addr>[+additional quantity]
   Read coil at address <addr>, plus any additional coils if specified.
 
-  rc:0x100+199	reads 200 coils starting at address 0x100 (hex)
-  rc:300	reads 1 coil at address 300 (decimal)
+  rc:0x100+199         reads 200 coils starting at address 0x100 (hex)
+  rc:300               reads 1 coil at address 300 (decimal)
 
 * <rdi|readDiscreteInputs>:<addr>[+additional quantity]
   Read discrete input at address <addr>, plus any additional discrete inputs if specified.
 
-  rdi:0x100+199	reads 200 discrete inputs starting at address 0x100 (hex)
-  rdi:300	reads 1 discrete input at address 300 (decimal)
+  rdi:0x100+199        reads 200 discrete inputs starting at address 0x100 (hex)
+  rdi:300              reads 1 discrete input at address 300 (decimal)
 
 * <rh|readHoldingRegisters>:<type>:<addr>[+additional quantity]
   Read holding registers at address <addr>, plus any additional registers if specified,
   decoded as <type> which should be one of:
-  - uint16:  unsigned 16-bit integer,
-  - int16:   signed 16-bit integer,
-  - uint32:  unsigned 32-bit integer (2 contiguous modbus registers),
-  - int32:   signed 32-bit integer (2 contiguous modbus registers),
-  - float32: 32-bit floating point number (2 contiguous modbus registers),
-  - uint64:  unsigned 64-bit integer (4 contiguous modbus registers),
-  - int64:   signed 64-bit integer (4 contiguous modbus registers),
-  - float64: 64-bit floating point number (4 contiguous modbus registers).
+  - uint16:            unsigned 16-bit integer,
+  - int16:             signed 16-bit integer,
+  - uint32:            unsigned 32-bit integer (2 contiguous modbus registers),
+  - int32:             signed 32-bit integer (2 contiguous modbus registers),
+  - float32:           32-bit floating point number (2 contiguous modbus registers),
+  - uint64:            unsigned 64-bit integer (4 contiguous modbus registers),
+  - int64:             signed 64-bit integer (4 contiguous modbus registers),
+  - float64:           64-bit floating point number (4 contiguous modbus registers),
+  - bytes:             string of bytes (2 bytes per modbus register).
 
-  rh:int16:0x300+1 	reads 2 consecutive 16-bit signed integers at addresses 0x300 and 0x301
-  rh:uint32:20		reads a 32-bit unsigned integer at addresses 20-21 (2 modbus registers)
-  rh:float32:500+10	reads 11 32-bit floating point numbers at addresses 500-521
-			(11 * 32bit make for 22 16-bit contiguous modbus registers)
+  rh:int16:0x300+1     reads 2 consecutive 16-bit signed integers at addresses 0x300 and 0x301
+  rh:uint32:20         reads a 32-bit unsigned integer at addresses 20-21 (2 modbus registers)
+  rh:float32:500+10    reads 11 32-bit floating point numbers at addresses 500-521
+                       (11 * 32bit make for 22 16-bit contiguous modbus registers)
 
 * <ri:readInputRegisters>:<type>:<addr>[+additional quanitity]
   Read input registers at address <addr>, plus any additional registers if specified, decoded
   in the same way as explained above.
 
-  ri:uint16:0x300+1	reads 2 consecutive 16-bit unsigned integers at addresses 0x300 and 0x301
-  ri:int32:20		reads a 32-bit signed integer at addresses 20-21 (2 modbus registers)
+  ri:uint16:0x300+1    reads 2 consecutive 16-bit unsigned integers at addresses 0x300 and 0x301
+  ri:int32:20          reads a 32-bit signed integer at addresses 20-21 (2 modbus registers)
 
 * <wc|writeCoil>:<addr>:<value>
   Set the coil at address <addr> to either true or false, depending on <value>.
 
-  wc:1:true	writes true to the coil at address 1
-  wc:2:false	writes false to the coil at address 2
+  wc:1:true            writes true to the coil at address 1
+  wc:2:false           writes false to the coil at address 2
 
 * <wr:writeRegister>:<type>:<addr>:<value>
   Write <value> to register(s) at address <addr>, using the encoding given by <type>.
 
-  wr:int16:0xf100:-10	writes -10 as a 16-bit signed integer at address 0xf100
-                        (1 modbus register)
-  wr:int32:0xff00:0xff	writes 0xff as a 32-bit signed integer at addresses 0xff00-0xff01
-			(2 consecutive modbus registers)
-  wr:float64:100:-3.2	writes -3.2 as a 64-bit float at addresses 100-103
-			(4 consecutive modbus registers)
+  wr:int16:0xf100:-10  writes -10 as a 16-bit signed integer at address 0xf100
+                       (1 modbus register)
+  wr:int32:0xff00:0xff writes 0xff as a 32-bit signed integer at addresses 0xff00-0xff01
+                       (2 consecutive modbus registers)
+  wr:float64:100:-3.2  writes -3.2 as a 64-bit float at addresses 100-103
+                       (4 consecutive modbus registers)
+  wr:bytes:5:fafbfcfd  writes 0xfafbfcfd as a 4-byte string at addresses 5-6
+                       (2 consecutive modbus registers)
 
 * sleep:<duration>
   Pause for <duration>, specified as a golang duration string.
 
-  sleep:300s		sleeps for 300 seconds
-  sleep:3m		sleeps for 3 minutes
-  sleep:3ms		sleeps for 3 milliseconds
+  sleep:300s           sleeps for 300 seconds
+  sleep:3m             sleeps for 3 minutes
+  sleep:3ms            sleeps for 3 milliseconds
 
 * <setUnitId|suid|sid>:<unit id>
   Switch to unit id (slave id) <unit id> for subsequent requests.
 
-  sid:10		selects unit id #10
+  sid:10               selects unit id #10
 
 * repeat
   Restart execution of the given commands.
 
-  rh:uint32:100 sleep:1s repeat   reads a 32-bit unsigned integer at addresses 100-101 and
-				  pauses for one second, forever in a loop.
+  rh:uint32:100 sleep:1s repeat  reads a 32-bit unsigned integer at addresses 100-101 and
+                                 pauses for one second, forever in a loop.
 
 * date
   Print the current date and time (can be useful for long-running scripts).
@@ -1093,10 +1173,10 @@ Available commands:
   - "c", "coils",
   - "di", "discreteInputs",
   - "hr", "holdingRegisters",
-  - "ir", "inputRegisters"
+  - "ir", "inputRegisters".
 
-  scan:hr	scans the device for holding registers.
-  scan:di	scans the device for discrete inputs.
+  scan:hr              scans the device for holding registers.
+  scan:di              scans the device for discrete inputs.
 
   Read requests are made over the entire address space (65535 addresses).
   Adresses for which a non-error response is received are listed, along with the value received.
