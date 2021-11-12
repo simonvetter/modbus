@@ -12,7 +12,8 @@ The client supports the following modes:
 - modbus TCP (a.k.a. MBAP),
 - modbus TCP over TLS (a.k.a. MBAPS or Modbus Security),
 - modbus RTU over TCP (RTU tunneled in TCP for use with e.g. remote serial
-  ports or cheap TCP to serial bridges).
+  ports or cheap TCP to serial bridges),
+- modbus RTU over UDP (RTU tunneled in UDP).
 
 The server supports:
 - modbus TCP (a.k.a. MBAP),

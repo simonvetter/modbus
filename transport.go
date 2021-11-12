@@ -4,8 +4,9 @@ type transportType uint
 const (
 	modbusRTU        transportType   = 1
 	modbusRTUOverTCP transportType   = 2
-	modbusTCP        transportType   = 3
-	modbusTCPOverTLS transportType   = 4
+	modbusRTUOverUDP transportType   = 3
+	modbusTCP        transportType   = 4
+	modbusTCPOverTLS transportType   = 5
 )
 
 type transport interface {

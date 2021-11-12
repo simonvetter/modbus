@@ -4,31 +4,31 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
-	"os"
 	"net"
-	"time"
+	"os"
 	"strings"
 	"sync"
+	"time"
 )
 
 type RegType	uint
 type Endianness uint
 type WordOrder	uint
 const (
-	PARITY_NONE		uint		= 0
-	PARITY_EVEN		uint		= 1
-	PARITY_ODD		uint		= 2
+	PARITY_NONE         uint = 0
+	PARITY_EVEN         uint = 1
+	PARITY_ODD          uint = 2
 
-	HOLDING_REGISTER	RegType		= 0
-	INPUT_REGISTER		RegType		= 1
+	HOLDING_REGISTER    RegType = 0
+	INPUT_REGISTER      RegType = 1
 
 	// endianness of 16-bit registers
-	BIG_ENDIAN		Endianness	= 1
-	LITTLE_ENDIAN		Endianness	= 2
+	BIG_ENDIAN          Endianness = 1
+	LITTLE_ENDIAN       Endianness = 2
 
 	// word order of 32-bit registers
-	HIGH_WORD_FIRST		WordOrder	= 1
-	LOW_WORD_FIRST		WordOrder	= 2
+	HIGH_WORD_FIRST     WordOrder = 1
+	LOW_WORD_FIRST      WordOrder = 2
 )
 
 // Modbus client configuration object.
@@ -56,14 +56,14 @@ type ClientConfiguration struct {
 
 // Modbus client object.
 type ModbusClient struct {
-	conf		ClientConfiguration
-	logger		*logger
-	lock		sync.Mutex
-	endianness	Endianness
-	wordOrder	WordOrder
-	transport	transport
-	unitId		uint8
-	transportType	transportType
+	conf          ClientConfiguration
+	logger        *logger
+	lock          sync.Mutex
+	endianness    Endianness
+	wordOrder     WordOrder
+	transport     transport
+	unitId        uint8
+	transportType transportType
 }
 
 // NewClient creates, configures and returns a modbus client object.
@@ -72,7 +72,7 @@ func NewClient(conf *ClientConfiguration) (mc *ModbusClient, err error) {
 	var splitURL   []string
 
 	mc = &ModbusClient{
-		conf:	*conf,
+		conf: *conf,
 	}
 
 	splitURL = strings.SplitN(mc.conf.URL, "://", 2)
@@ -112,25 +112,36 @@ func NewClient(conf *ClientConfiguration) (mc *ModbusClient, err error) {
 			mc.conf.Timeout = 300 * time.Millisecond
 		}
 
-		mc.transportType	= modbusRTU
+		mc.transportType    = modbusRTU
 
 	case "rtuovertcp":
 		if mc.conf.Speed == 0 {
-			mc.conf.Speed	= 19200
+			mc.conf.Speed   = 19200
 		}
 
 		if mc.conf.Timeout == 0 {
 			mc.conf.Timeout = 1 * time.Second
 		}
 
-		mc.transportType	= modbusRTUOverTCP
+		mc.transportType    = modbusRTUOverTCP
+
+	case "rtuoverudp":
+		if mc.conf.Speed == 0 {
+			mc.conf.Speed   = 19200
+		}
+
+		if mc.conf.Timeout == 0 {
+			mc.conf.Timeout = 1 * time.Second
+		}
+
+		mc.transportType    = modbusRTUOverUDP
 
 	case "tcp":
 		if mc.conf.Timeout == 0 {
 			mc.conf.Timeout = 1 * time.Second
 		}
 
-		mc.transportType	= modbusTCP
+		mc.transportType    = modbusTCP
 
 	case "tcp+tls":
 		if mc.conf.Timeout == 0 {
@@ -154,7 +165,7 @@ func NewClient(conf *ClientConfiguration) (mc *ModbusClient, err error) {
 			return
 		}
 
-		mc.transportType	= modbusTCPOverTLS
+		mc.transportType    = modbusTCPOverTLS
 
 	default:
 		if len(splitURL) != 2 {
@@ -166,14 +177,14 @@ func NewClient(conf *ClientConfiguration) (mc *ModbusClient, err error) {
 		return
 	}
 
-	mc.unitId	= 1
-	mc.endianness	= BIG_ENDIAN
-	mc.wordOrder	= HIGH_WORD_FIRST
+	mc.unitId     = 1
+	mc.endianness = BIG_ENDIAN
+	mc.wordOrder  = HIGH_WORD_FIRST
 
 	return
 }
 
-// Opens the underlying transport (tcp socket or serial line).
+// Opens the underlying transport (network socket or serial line).
 func (mc *ModbusClient) Open() (err error) {
 	var spw		*serialPortWrapper
 	var sock	net.Conn
@@ -218,6 +229,21 @@ func (mc *ModbusClient) Open() (err error) {
 		// create the RTU transport
 		mc.transport = newRTUTransport(
 			sock, mc.conf.URL, mc.conf.Speed, mc.conf.Timeout)
+
+	case modbusRTUOverUDP:
+		// open a socket to the remote host (note: no actual connection is
+		// being made as UDP is connection-less)
+		sock, err = net.DialTimeout("udp", mc.conf.URL, 5 * time.Second)
+		if err != nil {
+			return
+		}
+
+		// create the RTU transport, wrapping the UDP socket in
+		// an adapter to allow the transport to read the stream of
+		// packets byte per byte
+		mc.transport = newRTUTransport(
+			newUDPSockWrapper(sock),
+			mc.conf.URL, mc.conf.Speed, mc.conf.Timeout)
 
 	case modbusTCP:
 		// connect to the remote host
