@@ -71,7 +71,7 @@ func (spw *serialPortWrapper) Close() (err error) {
 //   masked and Read() returns with no data.
 // As the higher-level methods use io.ReadFull(), Read() will be called
 // as many times as necessary until either enough bytes have been read or an
-// error is returned (serial.ErrTimeout or any other i/o error).
+// error is returned (ErrRequestTimedOut or any other i/o error).
 func (spw *serialPortWrapper) Read(rxbuf []byte) (cnt int, err error) {
 	// return a timeout error if the deadline has passed
 	if time.Now().After(spw.deadline) {

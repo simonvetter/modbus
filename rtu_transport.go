@@ -94,7 +94,9 @@ func (rt *rtuTransport) ExecuteRequest(req *pdu) (res *pdu, err error) {
 	res, err = rt.readRTUFrame()
 
 	if err == ErrBadCRC || err == ErrProtocolError || err == ErrShortFrame {
-		// flush any data off the link to allow devices to re-sync
+		// wait for and flush any data coming off the link to allow
+		// devices to re-sync
+		time.Sleep(time.Duration(maxRTUFrameLength) * rt.t1)
 		discard(rt.link)
 	}
 
@@ -234,7 +236,7 @@ func expectedResponseLenth(responseCode uint8, responseLength uint8) (byteCount 
 	     fcWriteSingleCoil | 0x80,
 	     fcWriteMultipleCoils | 0x80,
 	     fcMaskWriteRegister | 0x80:      byteCount = 0
-	default: err = fmt.Errorf("unexpected response code (%v)", responseCode)
+	default: err = ErrProtocolError
 	}
 
 	return
@@ -246,8 +248,9 @@ func expectedResponseLenth(responseCode uint8, responseLength uint8) (byteCount 
 func discard(link rtuLink) {
 	var rxbuf = make([]byte, 1024)
 
-	link.SetDeadline(time.Now().Add(time.Millisecond))
-	link.Read(rxbuf)
+	link.SetDeadline(time.Now().Add(500 * time.Microsecond))
+	io.ReadFull(link, rxbuf)
+
 	return
 }
 
