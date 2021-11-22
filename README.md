@@ -11,9 +11,15 @@ The client supports the following modes:
 - modbus RTU (serial, over both RS-232 and RS-485),
 - modbus TCP (a.k.a. MBAP),
 - modbus TCP over TLS (a.k.a. MBAPS or Modbus Security),
+- modbus TCP over UDP (a.k.a. MBAP over UDP),
 - modbus RTU over TCP (RTU tunneled in TCP for use with e.g. remote serial
   ports or cheap TCP to serial bridges),
 - modbus RTU over UDP (RTU tunneled in UDP).
+
+Please note that UDP transports are not part of the Modbus specification.
+Some devices expect MBAP (modbus TCP) framing in UDP packets while others
+use RTU frames instead. The client support both so if unsure, try with
+both udp:// and rtuoverudp:// schemes.
 
 The server supports:
 - modbus TCP (a.k.a. MBAP),
@@ -47,6 +53,7 @@ func main() {
         URL:      "tcp://hostname-or-ip-address:502",
         Timeout:  1 * time.Second,
     })
+    // note: use udp:// for modbus TCP over UDP
 
     // for an RTU (serial) device/bus
     client, err = modbus.NewClient(&modbus.ClientConfiguration{
@@ -65,6 +72,7 @@ func main() {
         Speed:    19200,                   // serial link speed
         Timeout:  1 * time.Second,
     })
+    // note: use rtuoverudp:// for modbus RTU over UDP
 
     if err != nil {
         // error out if client creation failed

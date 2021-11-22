@@ -167,6 +167,13 @@ func NewClient(conf *ClientConfiguration) (mc *ModbusClient, err error) {
 
 		mc.transportType    = modbusTCPOverTLS
 
+	case "udp":
+		if mc.conf.Timeout == 0 {
+			mc.conf.Timeout = 1 * time.Second
+		}
+
+		mc.transportType    = modbusTCPOverUDP
+
 	default:
 		if len(splitURL) != 2 {
 			mc.logger.Errorf("missing client type in URL '%s'", mc.conf.URL)
@@ -282,6 +289,20 @@ func (mc *ModbusClient) Open() (err error) {
 
 		// create the TCP transport
 		mc.transport = newTCPTransport(sock, mc.conf.Timeout)
+
+	case modbusTCPOverUDP:
+		// open a socket to the remote host (note: no actual connection is
+		// being made as UDP is connection-less)
+		sock, err = net.DialTimeout("udp", mc.conf.URL, 5 * time.Second)
+		if err != nil {
+			return
+		}
+
+		// create the TCP transport, wrapping the UDP socket in
+		// an adapter to allow the transport to read the stream of
+		// packets byte per byte
+		mc.transport = newTCPTransport(
+			newUDPSockWrapper(sock), mc.conf.Timeout)
 
 	default:
 		// should never happen

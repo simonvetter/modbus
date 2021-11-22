@@ -7,6 +7,7 @@ const (
 	modbusRTUOverUDP transportType   = 3
 	modbusTCP        transportType   = 4
 	modbusTCPOverTLS transportType   = 5
+	modbusTCPOverUDP transportType   = 6
 )
 
 type transport interface {
