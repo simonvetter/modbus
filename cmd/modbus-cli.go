@@ -1115,6 +1115,15 @@ Register endianness and word order:
   float64), the word order can be set with --word-order <highfirst|lowfirst> and arbitrarily
   defaults to highfirst (i.e. most significant word first).
 
+Supported transports and associated target schemes:
+  - Modbus RTU using a local serial device:               rtu:///path/to/device
+  - Modbus RTU over TCP (RTU framing over a TCP socket):  rtuovertcp://host:port
+  - Modbus RTU over UDP (RTU framing over an UDP socket): rtuoverudp://host:port
+  - Modbus TCP (MBAP):                                    tcp://host:port
+  - Modbus TCP over TLS (MBAPS or Modbus Security):       tcp+tls://host:port
+  - Modbus TCP over UDP (MBAP over UDP):                  udp://host:port
+Note that UDP transports are not part of the Modbus protocol specification.
+
 Examples:
   $ modbus-cli --target tcp://10.100.0.10:502 rh:uint32:0x100+5 rc:0+10 wc:3:true
   Connect to 10.100.0.10 port 502, read 6 consecutive 32-bit unsigned integers at addresses
