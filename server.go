@@ -139,7 +139,7 @@ type RequestHandler interface {
 type ModbusServer struct {
 	conf		ServerConfiguration
 	logger		*logger
-	lock		sync.Mutex
+	lock		sync.RWMutex
 	started		bool
 	handler		RequestHandler
 	tcpListener	net.Listener
@@ -222,17 +222,16 @@ func NewServer(conf *ServerConfiguration, reqHandler RequestHandler) (
 
 // Starts accepting client connections.
 func (ms *ModbusServer) Start() (err error) {
-	ms.lock.Lock()
-	defer ms.lock.Unlock()
-
-	if ms.started {
+	if ms.Started() {
 		return
 	}
 
 	switch ms.transportType {
 	case modbusTCP, modbusTCPOverTLS:
 		// bind to a TCP socket
+	        ms.lock.Lock()
 		ms.tcpListener, err	= net.Listen("tcp", ms.conf.URL)
+	        ms.lock.Unlock()
 		if err != nil {
 			return
 		}
@@ -245,19 +244,21 @@ func (ms *ModbusServer) Start() (err error) {
 		return
 	}
 
+	ms.lock.Lock()
 	ms.started = true
+	ms.lock.Unlock()
 
 	return
 }
 
 // Stops accepting new client connections and closes any active session.
 func (ms *ModbusServer) Stop() (err error) {
-	ms.lock.Lock()
-	defer ms.lock.Unlock()
-
-	if !ms.started {
+	if !ms.Started() {
 		return
 	}
+
+	ms.lock.Lock()
+	defer ms.lock.Unlock()
 
 	ms.started = false
 
@@ -274,6 +275,22 @@ func (ms *ModbusServer) Stop() (err error) {
 	return
 }
 
+// Started returns whether the Modbus server is started or not
+func (ms *ModbusServer) Started() bool {
+	ms.lock.Lock()
+	defer ms.lock.Unlock()
+
+	return ms.started
+}
+
+// ClientsNumber returns the number of TCP clients connected
+func (ms *ModbusServer) ClientsNumber() int {
+       ms.lock.RLock()
+       defer ms.lock.RUnlock()
+
+       return len(ms.tcpClients)
+}
+
 // Accepts new client connections if the configured connection limit allows it.
 // Each connection is served from a dedicated goroutine to allow for concurrent
 // connections.
@@ -286,7 +303,7 @@ func (ms *ModbusServer) acceptTCPClients() {
 		sock, err = ms.tcpListener.Accept()
 		if err != nil {
 			// if the server has just been stopped, return here
-			if !ms.started {
+			if !ms.Started() {
 				return
 			}
 			ms.logger.Warningf("failed to accept client connection: %v", err)
