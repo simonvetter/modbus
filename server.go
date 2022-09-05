@@ -286,9 +286,12 @@ func (ms *ModbusServer) acceptTCPClients() {
 		sock, err = ms.tcpListener.Accept()
 		if err != nil {
 			// if the server has just been stopped, return here
+			ms.lock.Lock()
 			if !ms.started {
+				ms.lock.Unlock()
 				return
 			}
+			ms.lock.Unlock()
 			ms.logger.Warningf("failed to accept client connection: %v", err)
 			continue
 		}

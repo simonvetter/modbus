@@ -302,9 +302,11 @@ func TestTLSServer(t *testing.T) {
 
 	// make sure all underlying TCP client connections have been freed
 	time.Sleep(10 * time.Millisecond)
+	server.lock.Lock()
 	if len(server.tcpClients) != 0 {
 		t.Errorf("expected 0 client connections, saw: %v", len(server.tcpClients))
 	}
+	server.lock.Unlock()
 
 	// cleanup
 	c1.Close()

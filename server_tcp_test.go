@@ -50,10 +50,12 @@ func TestTCPServerWithConcurrentConnections(t *testing.T) {
 	}
 
 	// the server should have zero client connections so far
+	server.lock.Lock()
 	if len(server.tcpClients) != 0 {
 		t.Errorf("expected server.tcpClients to hold 0 entries, got: %v",
 			 len(server.tcpClients))
 	}
+	server.lock.Unlock()
 
 	// connect client #1
 	err = c1.Open()
@@ -64,10 +66,12 @@ func TestTCPServerWithConcurrentConnections(t *testing.T) {
 
 	// the server should have 1 client connection at this point
 	time.Sleep(time.Millisecond)
+	server.lock.Lock()
 	if len(server.tcpClients) != 1 {
 		t.Errorf("expected server.tcpClients to hold 1 entry, got: %v",
 			 len(server.tcpClients))
 	}
+	server.lock.Unlock()
 
 	// connect client #2
 	err = c2.Open()
@@ -78,10 +82,12 @@ func TestTCPServerWithConcurrentConnections(t *testing.T) {
 
 	time.Sleep(time.Millisecond)
 	// the server should now have 2 client connections, its maximum allowed
+	server.lock.Lock()
 	if len(server.tcpClients) != 2 {
 		t.Errorf("expected server.tcpClients to hold 2 entries, got: %v",
 			 len(server.tcpClients))
 	}
+	server.lock.Unlock()
 
 	// connect client #3
 	err = c3.Open()
@@ -92,10 +98,12 @@ func TestTCPServerWithConcurrentConnections(t *testing.T) {
 
 	// since the previous client was rejected, the active connection count
 	// should stay at 2
+	server.lock.Lock()
 	if len(server.tcpClients) != 2 {
 		t.Errorf("expected server.tcpClients to hold 2 entries, got: %v",
 			 len(server.tcpClients))
 	}
+	server.lock.Unlock()
 
 	// c1 and c2 should both be able to make requests while c3 should error out
 	// as it has been disconnected (conn closed)
@@ -123,10 +131,12 @@ func TestTCPServerWithConcurrentConnections(t *testing.T) {
 	// close c2 and make sure the connection is freed
 	c2.Close()
 	time.Sleep(time.Millisecond)
+	server.lock.Lock()
 	if len(server.tcpClients) != 1 {
 		t.Errorf("expected server.tcpClients to hold 1 entry, got: %v",
 			 len(server.tcpClients))
 	}
+	server.lock.Unlock()
 
 	// reconnect c2
 	err = c2.Open()
@@ -140,10 +150,12 @@ func TestTCPServerWithConcurrentConnections(t *testing.T) {
 		t.Errorf("c2.WriteCoil() should have succeeded, got: %v", err)
 	}
 
+	server.lock.Lock()
 	if len(server.tcpClients) != 2 {
 		t.Errorf("expected server.tcpClients to hold 2 entries, got: %v",
 			 len(server.tcpClients))
 	}
+	server.lock.Unlock()
 
 	// check the coil value with c1
 	coils, err = c1.ReadCoils(0x0000, 2)
@@ -157,19 +169,23 @@ func TestTCPServerWithConcurrentConnections(t *testing.T) {
 	// close c1 and make sure the connection is freed
 	c1.Close()
 	time.Sleep(time.Millisecond)
+	server.lock.Lock()
 	if len(server.tcpClients) != 1 {
 		t.Errorf("expected server.tcpClients to hold 1 entry, got: %v",
 			 len(server.tcpClients))
 	}
+	server.lock.Unlock()
 
 	// stopping the server should disconnect all clients
 	server.Stop()
 
 	time.Sleep(time.Millisecond)
+	server.lock.Lock()
 	if len(server.tcpClients) != 0 {
 		t.Errorf("expected server.tcpClients to hold 0 entries, got: %v",
 			 len(server.tcpClients))
 	}
+	server.lock.Unlock()
 
 	// c2 should have been disconnected
 	coils, err = c2.ReadCoils(0x0003, 5)
