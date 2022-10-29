@@ -278,32 +278,30 @@ func (ms *ModbusServer) Stop() (err error) {
 // Each connection is served from a dedicated goroutine to allow for concurrent
 // connections.
 func (ms *ModbusServer) acceptTCPClients() {
-	var sock	net.Conn
-	var err		error
-	var accepted	bool
+	var sock     net.Conn
+	var err      error
+	var accepted bool
 
 	for {
 		sock, err = ms.tcpListener.Accept()
 		if err != nil {
-			// if the server has just been stopped, return here
-			ms.lock.Lock()
-			if !ms.started {
-				ms.lock.Unlock()
+			// if the server socket has just been closed, return here as
+			// this goroutine isn't going to see any new client connection
+			if errors.Is(err, net.ErrClosed) {
 				return
 			}
-			ms.lock.Unlock()
 			ms.logger.Warningf("failed to accept client connection: %v", err)
 			continue
 		}
 
 		ms.lock.Lock()
 		// apply a connection limit
-		if uint(len(ms.tcpClients)) < ms.conf.MaxClients {
-			accepted	= true
+		if ms.started && uint(len(ms.tcpClients)) < ms.conf.MaxClients {
+			accepted = true
 			// add the new client connection to the pool
-			ms.tcpClients	= append(ms.tcpClients, sock)
+			ms.tcpClients = append(ms.tcpClients, sock)
 		} else {
-			accepted	= false
+			accepted = false
 		}
 		ms.lock.Unlock()
 
