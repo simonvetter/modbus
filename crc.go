@@ -1,4 +1,6 @@
-package modbus
+package mbserver
+
+import "encoding/binary"
 
 var crcTable [256]uint16 = [256]uint16{
 	0x0000, 0xc0c1, 0xc181, 0x0140, 0xc301, 0x03c0, 0x0280, 0xc241,
@@ -41,9 +43,7 @@ type crc struct {
 
 // Prepares the CRC generator for use.
 func (c *crc) init() {
-	c.crc	= 0xffff
-
-	return
+	c.crc = 0xffff
 }
 
 // Adds the given bytes to the CRC.
@@ -51,23 +51,17 @@ func (c *crc) add(in []byte) {
 	var index byte
 
 	for _, b := range in {
-		index	= b ^ byte(c.crc & 0xff)
-		c.crc	>>= 8
-		c.crc	^= crcTable[index]
+		index = b ^ byte(c.crc&0xff)
+		c.crc >>= 8
+		c.crc ^= crcTable[index]
 	}
-
-	return
 }
 
 // Returns the CRC as two bytes, swapped.
 func (c *crc) value() (value []byte) {
-	value = uint16ToBytes(LITTLE_ENDIAN, c.crc)
-
-	return
+	return uint16ToBytes(binary.LittleEndian, c.crc)
 }
 
 func (c *crc) isEqual(low byte, high byte) (yes bool) {
-	yes = (bytesToUint16(LITTLE_ENDIAN, []byte{low, high}) == c.crc)
-
-	return
+	return binary.LittleEndian.Uint16([]byte{low, high}) == c.crc
 }

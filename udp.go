@@ -1,4 +1,4 @@
-package modbus
+package mbserver
 
 import (
 	"net"

@@ -1,4 +1,4 @@
-package modbus
+package mbserver
 
 import (
 	"fmt"
@@ -6,12 +6,12 @@ import (
 )
 
 type logger struct {
-	prefix	string
+	prefix string
 }
 
 func newLogger(prefix string) (l *logger) {
 	l = &logger{
-		prefix:	prefix,
+		prefix: prefix,
 	}
 
 	return
@@ -19,52 +19,36 @@ func newLogger(prefix string) (l *logger) {
 
 func (l *logger) Info(msg string) {
 	l.write(false, fmt.Sprintf("%s [info]: %s\n", l.prefix, msg))
-
-	return
 }
 
 func (l *logger) Infof(format string, msg ...interface{}) {
 	l.write(false, fmt.Sprintf("%s [info]: %s\n", l.prefix, fmt.Sprintf(format, msg...)))
-
-	return
 }
 
 func (l *logger) Warning(msg string) {
 	l.write(false, fmt.Sprintf("%s [warn]: %s\n", l.prefix, msg))
-
-	return
 }
 
 func (l *logger) Warningf(format string, msg ...interface{}) {
 	l.write(false, fmt.Sprintf("%s [warn]: %s\n", l.prefix, fmt.Sprintf(format, msg...)))
-
-	return
 }
 
 func (l *logger) Error(msg string) {
 	l.write(false, fmt.Sprintf("%s [error]: %s\n", l.prefix, msg))
-
-	return
 }
 
 func (l *logger) Errorf(format string, msg ...interface{}) {
 	l.write(false, fmt.Sprintf("%s [error]: %s\n", l.prefix, fmt.Sprintf(format, msg...)))
-
-	return
 }
 
 func (l *logger) Fatal(msg string) {
 	l.Error(msg)
 	os.Exit(1)
-
-	return
 }
 
 func (l *logger) Fatalf(format string, msg ...interface{}) {
 	l.Errorf(format, msg...)
 	os.Exit(1)
-
-	return
 }
 
 func (l *logger) write(stderr bool, msg string) {
@@ -73,6 +57,4 @@ func (l *logger) write(stderr bool, msg string) {
 	} else {
 		os.Stdout.WriteString(msg)
 	}
-
-	return
 }

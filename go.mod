@@ -1,5 +1,3 @@
-module github.com/simonvetter/modbus
+module github.com/andig/mbserver
 
-go 1.12
-
-require github.com/goburrow/serial v0.1.0
+go 1.18
