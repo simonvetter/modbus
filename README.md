@@ -180,6 +180,11 @@ Byte encoding/endianness/word ordering:
 * Little and Big endian, with and without word swap for 32 and 64-bit
   integers and floating point numbers.
 
+### Logging ###
+Both client and server objects will log to stdout by default.
+This behavior can be overriden by passing a log.Logger object
+through the Logger property of ClientConfiguration/ServerConfiguration.
+
 ### TODO (in no particular order)
 * Add RTU (serial) support to the server
 * Add more tests

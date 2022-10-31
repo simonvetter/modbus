@@ -71,7 +71,7 @@ func TestTCPTransportReadResponse(t *testing.T) {
 	go feedTestPipe(t, txchan, p1)
 
 
-	tt		= newTCPTransport(p2, 10 * time.Millisecond)
+	tt		= newTCPTransport(p2, 10 * time.Millisecond, nil)
 	tt.lastTxnId	= 0x9218
 
 	// read a valid response
@@ -221,7 +221,7 @@ func TestTCPTransportReadRequest(t *testing.T) {
 	go feedTestPipe(t, txchan, p1)
 
 
-	tt		= newTCPTransport(p2, 10 * time.Millisecond)
+	tt		= newTCPTransport(p2, 10 * time.Millisecond, nil)
 	tt.lastTxnId	= 0x0a00
 
 	// push three frames in a row:
@@ -348,7 +348,7 @@ func TestTCPTransportWriteResponse(t *testing.T) {
 	}(t, p2, done)
 
 
-	tt		= newTCPTransport(p1, 10 * time.Millisecond)
+	tt		= newTCPTransport(p1, 10 * time.Millisecond, nil)
 	tt.lastTxnId	= 0xc01f
 
 	err		= tt.WriteResponse(&pdu{

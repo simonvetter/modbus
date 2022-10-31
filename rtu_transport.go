@@ -3,6 +3,7 @@ package modbus
 import (
 	"fmt"
 	"io"
+	"log"
 	"time"
 )
 
@@ -27,9 +28,9 @@ type rtuLink interface {
 }
 
 // Returns a new RTU transport.
-func newRTUTransport(link rtuLink, addr string, speed uint, timeout time.Duration) (rt *rtuTransport) {
+func newRTUTransport(link rtuLink, addr string, speed uint, timeout time.Duration, customLogger *log.Logger) (rt *rtuTransport) {
 	rt = &rtuTransport{
-		logger:  newLogger(fmt.Sprintf("rtu-transport(%s)", addr)),
+		logger:  newLogger(fmt.Sprintf("rtu-transport(%s)", addr), customLogger),
 		link:    link,
 		timeout: timeout,
 		t1:      serialCharTime(speed),

@@ -406,7 +406,7 @@ func TestServerExtractRole(t *testing.T) {
 	var role     string
 
 	ms = &ModbusServer{
-		logger: newLogger("test-server-role-extraction"),
+		logger: newLogger("test-server-role-extraction", nil),
 	}
 
 	// load a client cert without role OID

@@ -70,7 +70,7 @@ func TestRTUTransportReadRTUFrame(t *testing.T) {
 	go feedTestPipe(t, txchan, p1)
 
 
-	rt		= newRTUTransport(p2, "", 9600, 10 * time.Millisecond)
+	rt		= newRTUTransport(p2, "", 9600, 10 * time.Millisecond, nil)
 
 	// read a valid response (illegal data address)
 	txchan		<- []byte{

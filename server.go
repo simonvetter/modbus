@@ -6,10 +6,11 @@ import (
 	"encoding/asn1"
 	"errors"
 	"fmt"
-	"time"
+	"log"
 	"net"
 	"strings"
 	"sync"
+	"time"
 )
 
 // Modbus Role PEM OID (see R-21 of the MBAPS spec)
@@ -32,6 +33,9 @@ type ServerConfiguration struct {
 	// client connections (tcp+tls only). Leaf (i.e. client) certificates can
 	// also be used in case of self-signed certs, or if cert pinning is required.
 	TLSClientCAs  *x509.CertPool
+	// Logger provides a custom sink for log messages.
+	// If nil, messages will be written to stdout.
+	Logger        *log.Logger
 }
 
 // Request object passed to the coil handler.
@@ -166,10 +170,11 @@ func NewServer(conf *ServerConfiguration, reqHandler RequestHandler) (
 		ms.conf.URL = splitURL[1]
 	}
 
-	ms.logger = newLogger(fmt.Sprintf("modbus-server(%s)", ms.conf.URL))
+	ms.logger = newLogger(
+		fmt.Sprintf("modbus-server(%s)", ms.conf.URL), ms.conf.Logger)
 
 	if ms.conf.URL == "" {
-		ms.logger.Errorf("missing host part in URL '%s')", conf.URL)
+		ms.logger.Errorf("missing host part in URL '%s'", conf.URL)
 		err = ErrConfigurationError
 		return
 	}
@@ -333,7 +338,7 @@ func (ms *ModbusServer) handleTCPClient(sock net.Conn) {
 	case modbusTCP:
 		// serve modbus requests over the raw TCP connection
 		ms.handleTransport(
-			newTCPTransport(sock, ms.conf.Timeout),
+			newTCPTransport(sock, ms.conf.Timeout, ms.conf.Logger),
 			sock.RemoteAddr().String(), "")
 
 	case modbusTCPOverTLS:
@@ -345,7 +350,7 @@ func (ms *ModbusServer) handleTCPClient(sock net.Conn) {
 		} else {
 			// serve modbus requests over the TLS tunnel
 			ms.handleTransport(
-				newTCPTransport(tlsSock, ms.conf.Timeout),
+				newTCPTransport(tlsSock, ms.conf.Timeout, ms.conf.Logger),
 				sock.RemoteAddr().String(), clientRole)
 		}
 

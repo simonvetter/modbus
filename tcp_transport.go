@@ -3,6 +3,7 @@ package modbus
 import (
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"time"
 )
@@ -20,11 +21,11 @@ type tcpTransport struct {
 }
 
 // Returns a new TCP transport.
-func newTCPTransport(socket net.Conn, timeout time.Duration) (tt *tcpTransport) {
+func newTCPTransport(socket net.Conn, timeout time.Duration, customLogger *log.Logger) (tt *tcpTransport) {
 	tt = &tcpTransport{
 		socket:		socket,
 		timeout:	timeout,
-		logger:		newLogger(fmt.Sprintf("tcp-transport(%s)", socket.RemoteAddr())),
+		logger:		newLogger(fmt.Sprintf("tcp-transport(%s)", socket.RemoteAddr()), customLogger),
 	}
 
 	return

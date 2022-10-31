@@ -4,6 +4,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
+	"log"
 	"net"
 	"os"
 	"strings"
@@ -52,6 +53,9 @@ type ClientConfiguration struct {
 	// the server (tcp+tls only). Leaf (i.e. server) certificates can also
 	// be used in case of self-signed certs, or if cert pinning is required.
 	TLSRootCAs    *x509.CertPool
+	// Logger provides a custom sink for log messages.
+	// If nil, messages will be written to stdout.
+	Logger        *log.Logger
 }
 
 // Modbus client object.
@@ -81,7 +85,8 @@ func NewClient(conf *ClientConfiguration) (mc *ModbusClient, err error) {
 		mc.conf.URL = splitURL[1]
 	}
 
-	mc.logger = newLogger(fmt.Sprintf("modbus-client(%s)", mc.conf.URL))
+	mc.logger = newLogger(
+		fmt.Sprintf("modbus-client(%s)", mc.conf.URL), conf.Logger)
 
 	switch clientType {
 	case "rtu":
@@ -221,7 +226,7 @@ func (mc *ModbusClient) Open() (err error) {
 
 		// create the RTU transport
 		mc.transport = newRTUTransport(
-			spw, mc.conf.URL, mc.conf.Speed, mc.conf.Timeout)
+			spw, mc.conf.URL, mc.conf.Speed, mc.conf.Timeout, mc.conf.Logger)
 
 	case modbusRTUOverTCP:
 		// connect to the remote host
@@ -235,7 +240,7 @@ func (mc *ModbusClient) Open() (err error) {
 
 		// create the RTU transport
 		mc.transport = newRTUTransport(
-			sock, mc.conf.URL, mc.conf.Speed, mc.conf.Timeout)
+			sock, mc.conf.URL, mc.conf.Speed, mc.conf.Timeout, mc.conf.Logger)
 
 	case modbusRTUOverUDP:
 		// open a socket to the remote host (note: no actual connection is
@@ -250,7 +255,7 @@ func (mc *ModbusClient) Open() (err error) {
 		// packets byte per byte
 		mc.transport = newRTUTransport(
 			newUDPSockWrapper(sock),
-			mc.conf.URL, mc.conf.Speed, mc.conf.Timeout)
+			mc.conf.URL, mc.conf.Speed, mc.conf.Timeout, mc.conf.Logger)
 
 	case modbusTCP:
 		// connect to the remote host
@@ -260,7 +265,7 @@ func (mc *ModbusClient) Open() (err error) {
 		}
 
 		// create the TCP transport
-		mc.transport = newTCPTransport(sock, mc.conf.Timeout)
+		mc.transport = newTCPTransport(sock, mc.conf.Timeout, mc.conf.Logger)
 
 	case modbusTCPOverTLS:
 		// connect to the remote host with TLS
@@ -288,7 +293,7 @@ func (mc *ModbusClient) Open() (err error) {
 		}
 
 		// create the TCP transport
-		mc.transport = newTCPTransport(sock, mc.conf.Timeout)
+		mc.transport = newTCPTransport(sock, mc.conf.Timeout, mc.conf.Logger)
 
 	case modbusTCPOverUDP:
 		// open a socket to the remote host (note: no actual connection is
@@ -302,7 +307,7 @@ func (mc *ModbusClient) Open() (err error) {
 		// an adapter to allow the transport to read the stream of
 		// packets byte per byte
 		mc.transport = newTCPTransport(
-			newUDPSockWrapper(sock), mc.conf.Timeout)
+			newUDPSockWrapper(sock), mc.conf.Timeout, mc.conf.Logger)
 
 	default:
 		// should never happen
