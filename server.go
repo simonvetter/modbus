@@ -396,10 +396,8 @@ func (ms *ModbusServer) handleTransport(t transport, clientAddr string, clientRo
 			}
 
 			// echo the address and value in the response
-			res.payload = append(res.payload,
-				uint16ToBytes(binary.BigEndian, addr)...)
-			res.payload = append(res.payload,
-				req.payload[2], req.payload[3])
+			res.payload = append(res.payload, asBytes(binary.BigEndian, addr)...)
+			res.payload = append(res.payload, req.payload[2], req.payload[3])
 
 		case fcWriteMultipleCoils:
 			var expectedLen int
@@ -463,10 +461,8 @@ func (ms *ModbusServer) handleTransport(t transport, clientAddr string, clientRo
 			}
 
 			// echo the address and quantity in the response
-			res.payload = append(res.payload,
-				uint16ToBytes(binary.BigEndian, addr)...)
-			res.payload = append(res.payload,
-				uint16ToBytes(binary.BigEndian, quantity)...)
+			res.payload = append(res.payload, asBytes(binary.BigEndian, addr)...)
+			res.payload = append(res.payload, asBytes(binary.BigEndian, quantity)...)
 
 		case fcReadHoldingRegisters, fcReadInputRegisters:
 			var regs []uint16
@@ -539,8 +535,7 @@ func (ms *ModbusServer) handleTransport(t transport, clientAddr string, clientRo
 			res.payload[0] = uint8(resCount * 2)
 
 			// register values
-			res.payload = append(res.payload,
-				uint16sToBytes(binary.BigEndian, regs)...)
+			res.payload = append(res.payload, uint16ToBytes(binary.BigEndian, regs)...)
 
 		case fcWriteSingleRegister:
 			var value uint16
@@ -577,10 +572,8 @@ func (ms *ModbusServer) handleTransport(t transport, clientAddr string, clientRo
 			}
 
 			// echo the address and value in the response
-			res.payload = append(res.payload,
-				uint16ToBytes(binary.BigEndian, addr)...)
-			res.payload = append(res.payload,
-				uint16ToBytes(binary.BigEndian, value)...)
+			res.payload = append(res.payload, asBytes(binary.BigEndian, addr)...)
+			res.payload = append(res.payload, asBytes(binary.BigEndian, value)...)
 
 		case fcWriteMultipleRegisters:
 			var expectedLen int
@@ -628,7 +621,7 @@ func (ms *ModbusServer) handleTransport(t transport, clientAddr string, clientRo
 					Addr:       addr,
 					Quantity:   quantity,
 					IsWrite:    true, // this is a write request
-					Args:       []uint16{binary.BigEndian.Uint16(req.payload[5:])},
+					Args:       bytesToUint16(binary.BigEndian, req.payload[5:]),
 				})
 			if err != nil {
 				break
@@ -641,10 +634,8 @@ func (ms *ModbusServer) handleTransport(t transport, clientAddr string, clientRo
 			}
 
 			// echo the address and quantity in the response
-			res.payload = append(res.payload,
-				uint16ToBytes(binary.BigEndian, addr)...)
-			res.payload = append(res.payload,
-				uint16ToBytes(binary.BigEndian, quantity)...)
+			res.payload = append(res.payload, asBytes(binary.BigEndian, addr)...)
+			res.payload = append(res.payload, asBytes(binary.BigEndian, quantity)...)
 
 		default:
 			res = &pdu{

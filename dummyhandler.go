@@ -1,5 +1,7 @@
 package mbserver
 
+var _ RequestHandler = (*DummyHandler)(nil)
+
 type DummyHandler struct{}
 
 func (h *DummyHandler) HandleCoils(req *CoilsRequest) ([]bool, error) {

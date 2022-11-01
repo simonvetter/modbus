@@ -189,11 +189,11 @@ func (tt *tcpTransport) readMBAPFrame() (p *pdu, txnId uint16, err error) {
 // Turns a PDU into an MBAP frame (MBAP header + PDU) and returns it as bytes.
 func (tt *tcpTransport) assembleMBAPFrame(txnId uint16, p *pdu) (payload []byte) {
 	// transaction identifier
-	payload = uint16ToBytes(binary.BigEndian, txnId)
+	payload = asBytes(binary.BigEndian, txnId)
 	// protocol identifier (always 0x0000)
 	payload = append(payload, 0x00, 0x00)
 	// length (covers unit identifier + function code + payload fields)
-	payload = append(payload, uint16ToBytes(binary.BigEndian, uint16(2+len(p.payload)))...)
+	payload = append(payload, asBytes(binary.BigEndian, uint16(2+len(p.payload)))...)
 	// unit identifier
 	payload = append(payload, p.unitId)
 	// function code

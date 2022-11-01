@@ -1,49 +1,51 @@
-package modbus
+package mbserver
 
 import (
+	"net"
 	"testing"
 	"time"
+
+	"github.com/simonvetter/modbus"
 )
 
 func TestTCPServerWithConcurrentConnections(t *testing.T) {
 	var server *ModbusServer
 	var err error
 	var coils []bool
-	var c1 *ModbusClient
-	var c2 *ModbusClient
-	var c3 *ModbusClient
-	var th *tcpTestHandler
+	var c1, c2, c3 *modbus.ModbusClient
 
-	th = &tcpTestHandler{}
+	th := &tcpTestHandler{}
 
-	server, err = NewServer(&ServerConfiguration{
-		URL:        "tcp://localhost:5502",
-		MaxClients: 2,
-	}, th)
+	server, err = New(th, MaxClients(2))
 	if err != nil {
 		t.Errorf("failed to create server: %v", err)
 	}
 
-	err = server.Start()
+	l, err := net.Listen("tcp", ":0")
 	if err != nil {
+		t.Error(err)
+	}
+	defer l.Close()
+
+	if err := server.Start(l); err != nil {
 		t.Errorf("failed to start server: %v", err)
 	}
 
 	// create 3 modbus clients
-	c1, err = NewClient(&ClientConfiguration{
-		URL: "tcp://localhost:5502",
+	c1, err = modbus.NewClient(&modbus.ClientConfiguration{
+		URL: "tcp://" + l.Addr().String(),
 	})
 	if err != nil {
 		t.Errorf("failed to create client: %v", err)
 	}
-	c2, err = NewClient(&ClientConfiguration{
-		URL: "tcp://localhost:5502",
+	c2, err = modbus.NewClient(&modbus.ClientConfiguration{
+		URL: "tcp://" + l.Addr().String(),
 	})
 	if err != nil {
 		t.Errorf("failed to create client: %v", err)
 	}
-	c3, err = NewClient(&ClientConfiguration{
-		URL: "tcp://localhost:5502",
+	c3, err = modbus.NewClient(&modbus.ClientConfiguration{
+		URL: "tcp://" + l.Addr().String(),
 	})
 	if err != nil {
 		t.Errorf("failed to create client: %v", err)
@@ -58,8 +60,7 @@ func TestTCPServerWithConcurrentConnections(t *testing.T) {
 	server.lock.Unlock()
 
 	// connect client #1
-	err = c1.Open()
-	if err != nil {
+	if err := c1.Open(); err != nil {
 		t.Errorf("c1.Connect() should have succeeded, got: %v", err)
 	}
 	c1.SetUnitId(9)
@@ -74,8 +75,7 @@ func TestTCPServerWithConcurrentConnections(t *testing.T) {
 	server.lock.Unlock()
 
 	// connect client #2
-	err = c2.Open()
-	if err != nil {
+	if err := c2.Open(); err != nil {
 		t.Errorf("c2.Connect() should have succeeded, got: %v", err)
 	}
 	c2.SetUnitId(9)
@@ -90,8 +90,7 @@ func TestTCPServerWithConcurrentConnections(t *testing.T) {
 	server.lock.Unlock()
 
 	// connect client #3
-	err = c3.Open()
-	if err != nil {
+	if err := c3.Open(); err != nil {
 		t.Errorf("c3.Connect() should have succeeded, got: %v", err)
 	}
 	c3.SetUnitId(9)
@@ -139,8 +138,7 @@ func TestTCPServerWithConcurrentConnections(t *testing.T) {
 	server.lock.Unlock()
 
 	// reconnect c2
-	err = c2.Open()
-	if err != nil {
+	if err := c2.Open(); err != nil {
 		t.Errorf("c2.Open should have succeeded, got: %v", err)
 	}
 
@@ -188,7 +186,7 @@ func TestTCPServerWithConcurrentConnections(t *testing.T) {
 	server.lock.Unlock()
 
 	// c2 should have been disconnected
-	coils, err = c2.ReadCoils(0x0003, 5)
+	_, err = c2.ReadCoils(0x0003, 5)
 	if err == nil {
 		t.Errorf("c2.ReadCoils() should have failed")
 	}
@@ -199,33 +197,33 @@ func TestTCPServerCoilsAndDiscreteInputs(t *testing.T) {
 	var err error
 	var coils []bool
 	var dis []bool
-	var client *ModbusClient
-	var th *tcpTestHandler
+	var client *modbus.ModbusClient
 
-	th = &tcpTestHandler{}
+	th := &tcpTestHandler{}
 
-	server, err = NewServer(&ServerConfiguration{
-		URL:        "tcp://localhost:5504",
-		MaxClients: 2,
-	}, th)
+	server, err = New(th)
 	if err != nil {
 		t.Errorf("failed to create server: %v", err)
 	}
 
-	err = server.Start()
+	l, err := net.Listen("tcp", ":0")
 	if err != nil {
+		t.Error(err)
+	}
+	defer l.Close()
+
+	if err := server.Start(l); err != nil {
 		t.Errorf("failed to start server: %v", err)
 	}
 
-	client, err = NewClient(&ClientConfiguration{
-		URL: "tcp://localhost:5504",
+	client, err = modbus.NewClient(&modbus.ClientConfiguration{
+		URL: "tcp://" + l.Addr().String(),
 	})
 	if err != nil {
 		t.Errorf("failed to create client: %v", err)
 	}
 
-	err = client.Open()
-	if err != nil {
+	if err := client.Open(); err != nil {
 		t.Errorf("client.Open() should have succeeded, got: %v", err)
 	}
 	client.SetUnitId(9)
@@ -271,19 +269,19 @@ func TestTCPServerCoilsAndDiscreteInputs(t *testing.T) {
 
 	// reading past the array size should return ErrIllegalDataAddress
 	_, err = client.ReadDiscreteInputs(0x000a, 1)
-	if err != ErrIllegalDataAddress {
+	if err != modbus.ErrIllegalDataAddress {
 		t.Errorf("expected ErrIllegalDataAddress, got: %v", err)
 	}
 	_, err = client.ReadCoils(0x000a, 1)
-	if err != ErrIllegalDataAddress {
+	if err != modbus.ErrIllegalDataAddress {
 		t.Errorf("expected ErrIllegalDataAddress, got: %v", err)
 	}
 	_, err = client.ReadDiscreteInputs(0x8, 3)
-	if err != ErrIllegalDataAddress {
+	if err != modbus.ErrIllegalDataAddress {
 		t.Errorf("expected ErrIllegalDataAddress, got: %v", err)
 	}
 	_, err = client.ReadCoils(0x8, 3)
-	if err != ErrIllegalDataAddress {
+	if err != modbus.ErrIllegalDataAddress {
 		t.Errorf("expected ErrIllegalDataAddress, got: %v", err)
 	}
 
@@ -340,19 +338,19 @@ func TestTCPServerCoilsAndDiscreteInputs(t *testing.T) {
 	err = client.WriteCoils(0x0005, []bool{
 		true, false, true, true,
 	})
-	if err != ErrIllegalFunction {
+	if err != modbus.ErrIllegalFunction {
 		t.Errorf("client.WriteCoils() should have returned ErrIllegalFunction, got: %v", err)
 	}
 	err = client.WriteCoil(0x0005, false)
-	if err != ErrIllegalFunction {
+	if err != modbus.ErrIllegalFunction {
 		t.Errorf("client.WriteCoil() should have returned ErrIllegalFunction, got: %v", err)
 	}
-	coils, err = client.ReadCoils(0x0005, 1)
-	if err != ErrIllegalFunction {
+	_, err = client.ReadCoils(0x0005, 1)
+	if err != modbus.ErrIllegalFunction {
 		t.Errorf("client.ReadCoils() should have returned ErrIllegalFunction, got: %v", err)
 	}
-	coils, err = client.ReadDiscreteInputs(0x0005, 1)
-	if err != ErrIllegalFunction {
+	_, err = client.ReadDiscreteInputs(0x0005, 1)
+	if err != modbus.ErrIllegalFunction {
 		t.Errorf("client.ReadDiscreteInputs() should have returned ErrIllegalFunction, got: %v", err)
 	}
 
@@ -363,40 +361,41 @@ func TestTCPServerCoilsAndDiscreteInputs(t *testing.T) {
 func TestTCPServerHoldingAndInputRegisters(t *testing.T) {
 	var server *ModbusServer
 	var err error
-	var client *ModbusClient
+	var client *modbus.ModbusClient
 	var th *tcpTestHandler
 	var regs []uint16
 
 	th = &tcpTestHandler{}
 
-	server, err = NewServer(&ServerConfiguration{
-		URL:        "tcp://localhost:5504",
-		MaxClients: 2,
-	}, th)
+	server, err = New(th)
 	if err != nil {
 		t.Errorf("failed to create server: %v", err)
 	}
 
-	err = server.Start()
+	l, err := net.Listen("tcp", ":0")
 	if err != nil {
+		t.Error(err)
+	}
+	defer l.Close()
+
+	if err := server.Start(l); err != nil {
 		t.Errorf("failed to start server: %v", err)
 	}
 
-	client, err = NewClient(&ClientConfiguration{
-		URL: "tcp://localhost:5504",
+	client, err = modbus.NewClient(&modbus.ClientConfiguration{
+		URL: "tcp://" + l.Addr().String(),
 	})
 	if err != nil {
 		t.Errorf("failed to create client: %v", err)
 	}
 
-	err = client.Open()
-	if err != nil {
+	if err := client.Open(); err != nil {
 		t.Errorf("client.Open() should have succeeded, got: %v", err)
 	}
 	client.SetUnitId(9)
 
 	// all 10 input registers should be 0x0000
-	regs, err = client.ReadRegisters(0x0000, 10, INPUT_REGISTER)
+	regs, err = client.ReadRegisters(0x0000, 10, modbus.INPUT_REGISTER)
 	if err != nil {
 		t.Errorf("client.ReadRegisters() should have succeeded, got: %v", err)
 	}
@@ -411,7 +410,7 @@ func TestTCPServerHoldingAndInputRegisters(t *testing.T) {
 		th.input[i] = 0xa710 + uint16(i)
 	}
 
-	regs, err = client.ReadRegisters(0x0000, 10, INPUT_REGISTER)
+	regs, err = client.ReadRegisters(0x0000, 10, modbus.INPUT_REGISTER)
 	if err != nil {
 		t.Errorf("client.ReadRegisters() should have succeeded, got: %v", err)
 	}
@@ -423,7 +422,7 @@ func TestTCPServerHoldingAndInputRegisters(t *testing.T) {
 	}
 
 	// reading addr 0x0009 (the very last register) should succeed
-	regs, err = client.ReadRegisters(0x0009, 1, INPUT_REGISTER)
+	regs, err = client.ReadRegisters(0x0009, 1, modbus.INPUT_REGISTER)
 	if err != nil {
 		t.Errorf("client.ReadRegisters() should have succeeded, got: %v", err)
 	}
@@ -432,17 +431,17 @@ func TestTCPServerHoldingAndInputRegisters(t *testing.T) {
 	}
 
 	// reading past address 0x000a should fail
-	regs, err = client.ReadRegisters(0x0001, 10, INPUT_REGISTER)
-	if err != ErrIllegalDataAddress {
+	_, err = client.ReadRegisters(0x0001, 10, modbus.INPUT_REGISTER)
+	if err != modbus.ErrIllegalDataAddress {
 		t.Errorf("client.ReadRegisters() should have returned ErrIllegalDataAddress, got: %v", err)
 	}
-	regs, err = client.ReadRegisters(0x0000, 11, INPUT_REGISTER)
-	if err != ErrIllegalDataAddress {
+	_, err = client.ReadRegisters(0x0000, 11, modbus.INPUT_REGISTER)
+	if err != modbus.ErrIllegalDataAddress {
 		t.Errorf("client.ReadRegisters() should have returned ErrIllegalDataAddress, got: %v", err)
 	}
 
 	// all 10 holding registers should still be 0x0000
-	regs, err = client.ReadRegisters(0x0000, 10, HOLDING_REGISTER)
+	regs, err = client.ReadRegisters(0x0000, 10, modbus.HOLDING_REGISTER)
 	if err != nil {
 		t.Errorf("client.ReadRegisters() should have succeeded, got: %v", err)
 	}
@@ -459,7 +458,7 @@ func TestTCPServerHoldingAndInputRegisters(t *testing.T) {
 	}
 
 	// make sure it has been written to
-	regs, err = client.ReadRegisters(0x0005, 5, HOLDING_REGISTER)
+	regs, err = client.ReadRegisters(0x0005, 5, modbus.HOLDING_REGISTER)
 	if err != nil {
 		t.Errorf("client.ReadRegisters() should have succeeded, got: %v", err)
 	}
@@ -499,7 +498,7 @@ func TestTCPServerHoldingAndInputRegisters(t *testing.T) {
 	}
 
 	// make sure they have all been written to
-	regs, err = client.ReadRegisters(0x0000, 10, HOLDING_REGISTER)
+	regs, err = client.ReadRegisters(0x0000, 10, modbus.HOLDING_REGISTER)
 	if err != nil {
 		t.Errorf("client.ReadRegisters() should have succeeded, got: %v", err)
 	}
@@ -518,7 +517,7 @@ func TestTCPServerHoldingAndInputRegisters(t *testing.T) {
 	}
 
 	// reading addr 0x0009 (the very last register) should succeed
-	regs, err = client.ReadRegisters(0x0009, 1, HOLDING_REGISTER)
+	regs, err = client.ReadRegisters(0x0009, 1, modbus.HOLDING_REGISTER)
 	if err != nil {
 		t.Errorf("client.ReadRegisters() should have succeeded, got: %v", err)
 	}
@@ -527,12 +526,12 @@ func TestTCPServerHoldingAndInputRegisters(t *testing.T) {
 	}
 
 	// reading past address 0x000a should fail
-	regs, err = client.ReadRegisters(0x0001, 10, HOLDING_REGISTER)
-	if err != ErrIllegalDataAddress {
+	_, err = client.ReadRegisters(0x0001, 10, modbus.HOLDING_REGISTER)
+	if err != modbus.ErrIllegalDataAddress {
 		t.Errorf("client.ReadRegisters() should have returned ErrIllegalDataAddress, got: %v", err)
 	}
-	regs, err = client.ReadRegisters(0x0000, 11, HOLDING_REGISTER)
-	if err != ErrIllegalDataAddress {
+	_, err = client.ReadRegisters(0x0000, 11, modbus.HOLDING_REGISTER)
+	if err != modbus.ErrIllegalDataAddress {
 		t.Errorf("client.ReadRegisters() should have returned ErrIllegalDataAddress, got: %v", err)
 	}
 
@@ -542,19 +541,19 @@ func TestTCPServerHoldingAndInputRegisters(t *testing.T) {
 	err = client.WriteRegisters(0x0005, []uint16{
 		0x0000, 0x0001,
 	})
-	if err != ErrIllegalFunction {
+	if err != modbus.ErrIllegalFunction {
 		t.Errorf("client.WriteRegisters() should have returned ErrIllegalFunction, got: %v", err)
 	}
 	err = client.WriteRegister(0x0001, 0xffff)
-	if err != ErrIllegalFunction {
+	if err != modbus.ErrIllegalFunction {
 		t.Errorf("client.WriteRegister() should have returned ErrIllegalFunction, got: %v", err)
 	}
-	regs, err = client.ReadRegisters(0x0005, 1, HOLDING_REGISTER)
-	if err != ErrIllegalFunction {
+	_, err = client.ReadRegisters(0x0005, 1, modbus.HOLDING_REGISTER)
+	if err != modbus.ErrIllegalFunction {
 		t.Errorf("client.ReadRegisters() should have returned ErrIllegalFunction, got: %v", err)
 	}
-	regs, err = client.ReadRegisters(0x0005, 1, INPUT_REGISTER)
-	if err != ErrIllegalFunction {
+	_, err = client.ReadRegisters(0x0005, 1, modbus.INPUT_REGISTER)
+	if err != modbus.ErrIllegalFunction {
 		t.Errorf("client.ReadRegisters() should have returned ErrIllegalFunction, got: %v", err)
 	}
 
@@ -587,6 +586,8 @@ func (th *tcpTestHandler) HandleCoils(req *CoilsRequest) (res []bool, err error)
 		}
 		res = append(res, th.coils[int(req.Addr)+i])
 	}
+
+	return
 }
 
 func (th *tcpTestHandler) HandleDiscreteInputs(req *DiscreteInputsRequest) (res []bool, err error) {
@@ -604,6 +605,8 @@ func (th *tcpTestHandler) HandleDiscreteInputs(req *DiscreteInputsRequest) (res 
 	for i := 0; i < int(req.Quantity); i++ {
 		res = append(res, th.di[int(req.Addr)+i])
 	}
+
+	return
 }
 
 func (th *tcpTestHandler) HandleHoldingRegisters(req *HoldingRegistersRequest) (res []uint16, err error) {
@@ -624,6 +627,8 @@ func (th *tcpTestHandler) HandleHoldingRegisters(req *HoldingRegistersRequest) (
 		}
 		res = append(res, th.holding[int(req.Addr)+i])
 	}
+
+	return
 }
 
 func (th *tcpTestHandler) HandleInputRegisters(req *InputRegistersRequest) (res []uint16, err error) {
@@ -641,4 +646,6 @@ func (th *tcpTestHandler) HandleInputRegisters(req *InputRegistersRequest) (res 
 	for i := 0; i < int(req.Quantity); i++ {
 		res = append(res, th.input[int(req.Addr)+i])
 	}
+
+	return
 }

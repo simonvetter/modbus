@@ -8,7 +8,7 @@ import (
 func TestUint16ToBytes(t *testing.T) {
 	var out []byte
 
-	out = uint16ToBytes(binary.BigEndian, 0x4321)
+	out = asBytes(binary.BigEndian, 0x4321)
 	if len(out) != 2 {
 		t.Errorf("expected 2 bytes, got %v", len(out))
 	}
@@ -16,7 +16,7 @@ func TestUint16ToBytes(t *testing.T) {
 		t.Errorf("expected {0x43, 0x21}, got {0x%02x, 0x%02x}", out[0], out[1])
 	}
 
-	out = uint16ToBytes(binary.LittleEndian, 0x4321)
+	out = asBytes(binary.LittleEndian, 0x4321)
 	if len(out) != 2 {
 		t.Errorf("expected 2 bytes, got %v", len(out))
 	}
@@ -28,7 +28,7 @@ func TestUint16ToBytes(t *testing.T) {
 func TestUint16sToBytes(t *testing.T) {
 	var out []byte
 
-	out = uint16sToBytes(binary.BigEndian, []uint16{0x4321, 0x8765, 0xcba9})
+	out = uint16ToBytes(binary.BigEndian, []uint16{0x4321, 0x8765, 0xcba9})
 	if len(out) != 6 {
 		t.Errorf("expected 6 bytes, got %v", len(out))
 	}
@@ -42,7 +42,7 @@ func TestUint16sToBytes(t *testing.T) {
 		t.Errorf("expected {0xcb, 0xa9}, got {0x%02x, 0x%02x}", out[0], out[1])
 	}
 
-	out = uint16sToBytes(binary.LittleEndian, []uint16{0x4321, 0x8765, 0xcba9})
+	out = uint16ToBytes(binary.LittleEndian, []uint16{0x4321, 0x8765, 0xcba9})
 	if len(out) != 6 {
 		t.Errorf("expected 6 bytes, got %v", len(out))
 	}
@@ -74,7 +74,7 @@ func TestBytesToUint16(t *testing.T) {
 func TestBytesToUint16s(t *testing.T) {
 	var results []uint16
 
-	results = bytesToUint16s(binary.BigEndian, []byte{0x11, 0x22, 0x33, 0x44})
+	results = bytesToUint16(binary.BigEndian, []byte{0x11, 0x22, 0x33, 0x44})
 	if len(results) != 2 {
 		t.Errorf("expected 2 values, got %v", len(results))
 	}
@@ -85,7 +85,7 @@ func TestBytesToUint16s(t *testing.T) {
 		t.Errorf("expected 0x3344, got 0x%04x", results[1])
 	}
 
-	results = bytesToUint16s(binary.LittleEndian, []byte{0x11, 0x22, 0x33, 0x44})
+	results = bytesToUint16(binary.LittleEndian, []byte{0x11, 0x22, 0x33, 0x44})
 	if len(results) != 2 {
 		t.Errorf("expected 2 values, got %v", len(results))
 	}
@@ -141,7 +141,7 @@ func TestUint32ToBytes(t *testing.T) {
 func TestBytesToUint32s(t *testing.T) {
 	var results []uint32
 
-	results = bytesToUint32s(binary.BigEndian, HIGH_WORD_FIRST, []byte{
+	results = bytesToUint32(binary.BigEndian, HIGH_WORD_FIRST, []byte{
 		0x87, 0x65, 0x43, 0x21,
 		0x00, 0x11, 0x22, 0x33,
 	})
@@ -155,7 +155,7 @@ func TestBytesToUint32s(t *testing.T) {
 		t.Errorf("expected 0x00112233, got 0x%08x", results[1])
 	}
 
-	results = bytesToUint32s(binary.BigEndian, LOW_WORD_FIRST, []byte{
+	results = bytesToUint32(binary.BigEndian, LOW_WORD_FIRST, []byte{
 		0x87, 0x65, 0x43, 0x21,
 		0x00, 0x11, 0x22, 0x33,
 	})
@@ -169,7 +169,7 @@ func TestBytesToUint32s(t *testing.T) {
 		t.Errorf("expected 0x22330011, got 0x%08x", results[1])
 	}
 
-	results = bytesToUint32s(binary.LittleEndian, LOW_WORD_FIRST, []byte{
+	results = bytesToUint32(binary.LittleEndian, LOW_WORD_FIRST, []byte{
 		0x87, 0x65, 0x43, 0x21,
 		0x00, 0x11, 0x22, 0x33,
 	})
@@ -183,7 +183,7 @@ func TestBytesToUint32s(t *testing.T) {
 		t.Errorf("expected 0x33221100, got 0x%08x", results[1])
 	}
 
-	results = bytesToUint32s(binary.LittleEndian, HIGH_WORD_FIRST, []byte{
+	results = bytesToUint32(binary.LittleEndian, HIGH_WORD_FIRST, []byte{
 		0x87, 0x65, 0x43, 0x21,
 		0x00, 0x11, 0x22, 0x33,
 	})
@@ -241,7 +241,7 @@ func TestFloat32ToBytes(t *testing.T) {
 func TestBytesToFloat32s(t *testing.T) {
 	var results []float32
 
-	results = bytesToFloat32s(binary.BigEndian, HIGH_WORD_FIRST, []byte{
+	results = bytesToFloat32(binary.BigEndian, HIGH_WORD_FIRST, []byte{
 		0x3f, 0x9d, 0xf3, 0xb6,
 		0x40, 0x49, 0x0f, 0xdb,
 	})
@@ -255,7 +255,7 @@ func TestBytesToFloat32s(t *testing.T) {
 		t.Errorf("expected 3.14159274101, got %.09f", results[1])
 	}
 
-	results = bytesToFloat32s(binary.BigEndian, LOW_WORD_FIRST, []byte{
+	results = bytesToFloat32(binary.BigEndian, LOW_WORD_FIRST, []byte{
 		0xf3, 0xb6, 0x3f, 0x9d,
 		0x0f, 0xdb, 0x40, 0x49,
 	})
@@ -269,7 +269,7 @@ func TestBytesToFloat32s(t *testing.T) {
 		t.Errorf("expected 3.14159274101, got %.09f", results[1])
 	}
 
-	results = bytesToFloat32s(binary.LittleEndian, LOW_WORD_FIRST, []byte{
+	results = bytesToFloat32(binary.LittleEndian, LOW_WORD_FIRST, []byte{
 		0xb6, 0xf3, 0x9d, 0x3f,
 		0xdb, 0x0f, 0x49, 0x40,
 	})
@@ -283,7 +283,7 @@ func TestBytesToFloat32s(t *testing.T) {
 		t.Errorf("expected 3.14159274101, got %.09f", results[1])
 	}
 
-	results = bytesToFloat32s(binary.LittleEndian, HIGH_WORD_FIRST, []byte{
+	results = bytesToFloat32(binary.LittleEndian, HIGH_WORD_FIRST, []byte{
 		0x9d, 0x3f, 0xb6, 0xf3,
 		0x49, 0x40, 0xdb, 0x0f,
 	})
@@ -354,7 +354,7 @@ func TestUint64ToBytes(t *testing.T) {
 func TestBytesToUint64s(t *testing.T) {
 	var results []uint64
 
-	results = bytesToUint64s(binary.BigEndian, HIGH_WORD_FIRST, []byte{
+	results = bytesToUint64(binary.BigEndian, HIGH_WORD_FIRST, []byte{
 		0x0f, 0xed, 0xcb, 0xa9, 0x87, 0x65, 0x43, 0x21,
 		0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77,
 	})
@@ -368,7 +368,7 @@ func TestBytesToUint64s(t *testing.T) {
 		t.Errorf("expected 0x0011223344556677, got 0x%016x", results[1])
 	}
 
-	results = bytesToUint64s(binary.BigEndian, LOW_WORD_FIRST, []byte{
+	results = bytesToUint64(binary.BigEndian, LOW_WORD_FIRST, []byte{
 		0x0f, 0xed, 0xcb, 0xa9, 0x87, 0x65, 0x43, 0x21,
 		0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77,
 	})
@@ -384,7 +384,7 @@ func TestBytesToUint64s(t *testing.T) {
 		t.Errorf("expected 0x6677445522330011, got 0x%016x", results[1])
 	}
 
-	results = bytesToUint64s(binary.LittleEndian, LOW_WORD_FIRST, []byte{
+	results = bytesToUint64(binary.LittleEndian, LOW_WORD_FIRST, []byte{
 		0x0f, 0xed, 0xcb, 0xa9, 0x87, 0x65, 0x43, 0x21,
 		0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77,
 	})
@@ -398,7 +398,7 @@ func TestBytesToUint64s(t *testing.T) {
 		t.Errorf("expected 0x7766554433221100, got 0x%016x", results[1])
 	}
 
-	results = bytesToUint64s(binary.LittleEndian, HIGH_WORD_FIRST, []byte{
+	results = bytesToUint64(binary.LittleEndian, HIGH_WORD_FIRST, []byte{
 		0x0f, 0xed, 0xcb, 0xa9, 0x87, 0x65, 0x43, 0x21,
 		0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77,
 	})
@@ -461,7 +461,7 @@ func TestFloat64ToBytes(t *testing.T) {
 func TestBytesToFloat64s(t *testing.T) {
 	var results []float64
 
-	results = bytesToFloat64s(binary.BigEndian, HIGH_WORD_FIRST, []byte{
+	results = bytesToFloat64(binary.BigEndian, HIGH_WORD_FIRST, []byte{
 		0x3f, 0xf3, 0xc0, 0xca, 0x2a, 0x5b, 0x1d, 0x5d,
 		0x40, 0x09, 0x21, 0xfb, 0x5f, 0xff, 0xe9, 0x5e,
 	})
@@ -475,7 +475,7 @@ func TestBytesToFloat64s(t *testing.T) {
 		t.Errorf("expected 3.14159274101, got %.09f", results[1])
 	}
 
-	results = bytesToFloat64s(binary.BigEndian, LOW_WORD_FIRST, []byte{
+	results = bytesToFloat64(binary.BigEndian, LOW_WORD_FIRST, []byte{
 		0x1d, 0x5d, 0x2a, 0x5b, 0xc0, 0xca, 0x3f, 0xf3,
 		0xe9, 0x5e, 0x5f, 0xff, 0x21, 0xfb, 0x40, 0x09,
 	})
@@ -489,7 +489,7 @@ func TestBytesToFloat64s(t *testing.T) {
 		t.Errorf("expected 3.14159274101, got %.09f", results[1])
 	}
 
-	results = bytesToFloat64s(binary.LittleEndian, LOW_WORD_FIRST, []byte{
+	results = bytesToFloat64(binary.LittleEndian, LOW_WORD_FIRST, []byte{
 		0x5d, 0x1d, 0x5b, 0x2a, 0xca, 0xc0, 0xf3, 0x3f,
 		0x5e, 0xe9, 0xff, 0x5f, 0xfb, 0x21, 0x09, 0x40,
 	})
@@ -503,7 +503,7 @@ func TestBytesToFloat64s(t *testing.T) {
 		t.Errorf("expected 3.14159274101, got %.09f", results[1])
 	}
 
-	results = bytesToFloat64s(binary.LittleEndian, HIGH_WORD_FIRST, []byte{
+	results = bytesToFloat64(binary.LittleEndian, HIGH_WORD_FIRST, []byte{
 		0xf3, 0x3f, 0xca, 0xc0, 0x5b, 0x2a, 0x5d, 0x1d,
 		0x09, 0x40, 0xfb, 0x21, 0xff, 0x5f, 0x5e, 0xe9,
 	})

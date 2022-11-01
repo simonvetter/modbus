@@ -59,7 +59,7 @@ func (c *crc) add(in []byte) {
 
 // Returns the CRC as two bytes, swapped.
 func (c *crc) value() (value []byte) {
-	return uint16ToBytes(binary.LittleEndian, c.crc)
+	return asBytes(binary.LittleEndian, c.crc)
 }
 
 func (c *crc) isEqual(low byte, high byte) (yes bool) {

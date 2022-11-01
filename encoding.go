@@ -5,21 +5,21 @@ import (
 	"math"
 )
 
-func uint16ToBytes(bo binary.ByteOrder, in uint16) []byte {
+func asBytes(bo binary.ByteOrder, in uint16) []byte {
 	out := make([]byte, 2)
 	bo.PutUint16(out, in)
 	return out
 }
 
-func uint16sToBytes(bo binary.ByteOrder, in []uint16) (out []byte) {
+func uint16ToBytes(bo binary.ByteOrder, in []uint16) (out []byte) {
 	for i := range in {
-		out = append(out, uint16ToBytes(bo, in[i])...)
+		out = append(out, asBytes(bo, in[i])...)
 	}
 
 	return
 }
 
-func bytesToUint16s(bo binary.ByteOrder, in []byte) (out []uint16) {
+func bytesToUint16(bo binary.ByteOrder, in []byte) (out []uint16) {
 	for i := 0; i < len(in); i += 2 {
 		out = append(out, bo.Uint16(in[i:i+2]))
 	}
@@ -27,7 +27,7 @@ func bytesToUint16s(bo binary.ByteOrder, in []byte) (out []uint16) {
 	return
 }
 
-func bytesToUint32s(bo binary.ByteOrder, wordOrder WordOrder, in []byte) (out []uint32) {
+func bytesToUint32(bo binary.ByteOrder, wordOrder WordOrder, in []byte) (out []uint32) {
 	var u32 uint32
 
 	for i := 0; i < len(in); i += 4 {
@@ -74,8 +74,8 @@ func uint32ToBytes(bo binary.ByteOrder, wordOrder WordOrder, in uint32) (out []b
 	return
 }
 
-func bytesToFloat32s(bo binary.ByteOrder, wordOrder WordOrder, in []byte) (out []float32) {
-	for _, u32 := range bytesToUint32s(bo, wordOrder, in) {
+func bytesToFloat32(bo binary.ByteOrder, wordOrder WordOrder, in []byte) (out []float32) {
+	for _, u32 := range bytesToUint32(bo, wordOrder, in) {
 		out = append(out, math.Float32frombits(u32))
 	}
 
@@ -86,7 +86,7 @@ func float32ToBytes(bo binary.ByteOrder, wordOrder WordOrder, in float32) []byte
 	return uint32ToBytes(bo, wordOrder, math.Float32bits(in))
 }
 
-func bytesToUint64s(bo binary.ByteOrder, wordOrder WordOrder, in []byte) (out []uint64) {
+func bytesToUint64(bo binary.ByteOrder, wordOrder WordOrder, in []byte) (out []uint64) {
 	var u64 uint64
 
 	for i := 0; i < len(in); i += 8 {
@@ -137,8 +137,8 @@ func uint64ToBytes(bo binary.ByteOrder, wordOrder WordOrder, in uint64) (out []b
 	return
 }
 
-func bytesToFloat64s(bo binary.ByteOrder, wordOrder WordOrder, in []byte) (out []float64) {
-	for _, u64 := range bytesToUint64s(bo, wordOrder, in) {
+func bytesToFloat64(bo binary.ByteOrder, wordOrder WordOrder, in []byte) (out []float64) {
+	for _, u64 := range bytesToUint64(bo, wordOrder, in) {
 		out = append(out, math.Float64frombits(u64))
 	}
 
