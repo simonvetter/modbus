@@ -234,8 +234,7 @@ func (ms *ModbusServer) acceptTCPClients() {
 			// spin a client handler goroutine to serve the new client
 			go ms.handleTCPClient(sock)
 		} else {
-			ms.logger.Warningf("max. number of concurrent connections "+
-				"reached, rejecting %v", sock.RemoteAddr())
+			ms.logger.Warningf("max. number of concurrent connections reached, rejecting %v", sock.RemoteAddr())
 			// discard the connection
 			sock.Close()
 		}
@@ -270,17 +269,13 @@ func (ms *ModbusServer) handleTCPClient(sock net.Conn) {
 // calls the user-provided handler, then encodes and writes the response
 // to the transport.
 func (ms *ModbusServer) handleTransport(t transport, clientAddr string, clientRole string) {
-	var req *pdu
-	var res *pdu
-	var err error
-	var addr uint16
-	var quantity uint16
-
 	for {
-		req, err = t.ReadRequest()
+		req, err := t.ReadRequest()
 		if err != nil {
 			return
 		}
+
+		var res *pdu
 
 		switch req.functionCode {
 		case fcReadCoils, fcReadDiscreteInputs:
@@ -293,8 +288,8 @@ func (ms *ModbusServer) handleTransport(t transport, clientAddr string, clientRo
 			}
 
 			// decode address and quantity fields
-			addr = binary.BigEndian.Uint16(req.payload[0:2])
-			quantity = binary.BigEndian.Uint16(req.payload[2:4])
+			addr := binary.BigEndian.Uint16(req.payload[0:2])
+			quantity := binary.BigEndian.Uint16(req.payload[2:4])
 
 			// ensure the reply never exceeds the maximum PDU length and we
 			// never read past 0xffff
@@ -332,8 +327,7 @@ func (ms *ModbusServer) handleTransport(t transport, clientAddr string, clientRo
 
 			// make sure the handler returned the expected number of items
 			if err == nil && resCount != int(quantity) {
-				ms.logger.Errorf("handler returned %v bools, "+
-					"expected %v", resCount, quantity)
+				ms.logger.Errorf("handler returned %v bools, expected %v", resCount, quantity)
 				err = ErrServerDeviceFailure
 				break
 			}
@@ -365,7 +359,7 @@ func (ms *ModbusServer) handleTransport(t transport, clientAddr string, clientRo
 			}
 
 			// decode the address field
-			addr = binary.BigEndian.Uint16(req.payload[0:2])
+			addr := binary.BigEndian.Uint16(req.payload[0:2])
 
 			// validate the value field (should be either 0xff00 or 0x0000)
 			if (req.payload[2] != 0xff && req.payload[2] != 0x00) ||
@@ -408,8 +402,8 @@ func (ms *ModbusServer) handleTransport(t transport, clientAddr string, clientRo
 			}
 
 			// decode address and quantity fields
-			addr = binary.BigEndian.Uint16(req.payload[0:2])
-			quantity = binary.BigEndian.Uint16(req.payload[2:4])
+			addr := binary.BigEndian.Uint16(req.payload[0:2])
+			quantity := binary.BigEndian.Uint16(req.payload[2:4])
 
 			// ensure the reply never exceeds the maximum PDU length and we
 			// never read past 0xffff
@@ -474,8 +468,8 @@ func (ms *ModbusServer) handleTransport(t transport, clientAddr string, clientRo
 			}
 
 			// decode address and quantity fields
-			addr = binary.BigEndian.Uint16(req.payload[0:2])
-			quantity = binary.BigEndian.Uint16(req.payload[2:4])
+			addr := binary.BigEndian.Uint16(req.payload[0:2])
+			quantity := binary.BigEndian.Uint16(req.payload[2:4])
 
 			// ensure the reply never exceeds the maximum PDU length and we
 			// never read past 0xffff
@@ -514,8 +508,7 @@ func (ms *ModbusServer) handleTransport(t transport, clientAddr string, clientRo
 
 			// make sure the handler returned the expected number of items
 			if err == nil && resCount != int(quantity) {
-				ms.logger.Errorf("handler returned %v 16-bit values, "+
-					"expected %v", resCount, quantity)
+				ms.logger.Errorf("handler returned %v 16-bit values, expected %v", resCount, quantity)
 				err = ErrServerDeviceFailure
 				break
 			}
@@ -538,16 +531,14 @@ func (ms *ModbusServer) handleTransport(t transport, clientAddr string, clientRo
 			res.payload = append(res.payload, uint16ToBytes(binary.BigEndian, regs)...)
 
 		case fcWriteSingleRegister:
-			var value uint16
-
 			if len(req.payload) != 4 {
 				err = ErrProtocolError
 				break
 			}
 
 			// decode address and value fields
-			addr = binary.BigEndian.Uint16(req.payload[0:2])
-			value = binary.BigEndian.Uint16(req.payload[2:4])
+			addr := binary.BigEndian.Uint16(req.payload[0:2])
+			value := binary.BigEndian.Uint16(req.payload[2:4])
 
 			// invoke the handler
 			_, err = ms.handler.HandleHoldingRegisters(
@@ -576,16 +567,14 @@ func (ms *ModbusServer) handleTransport(t transport, clientAddr string, clientRo
 			res.payload = append(res.payload, asBytes(binary.BigEndian, value)...)
 
 		case fcWriteMultipleRegisters:
-			var expectedLen int
-
 			if len(req.payload) < 6 {
 				err = ErrProtocolError
 				break
 			}
 
 			// decode address and quantity fields
-			addr = binary.BigEndian.Uint16(req.payload[0:2])
-			quantity = binary.BigEndian.Uint16(req.payload[2:4])
+			addr := binary.BigEndian.Uint16(req.payload[0:2])
+			quantity := binary.BigEndian.Uint16(req.payload[2:4])
 
 			// ensure the reply never exceeds the maximum PDU length and we
 			// never read past 0xffff
@@ -599,7 +588,7 @@ func (ms *ModbusServer) handleTransport(t transport, clientAddr string, clientRo
 			}
 
 			// validate the byte count field (2 bytes per register)
-			expectedLen = int(quantity) * 2
+			expectedLen := int(quantity) * 2
 
 			if req.payload[4] != uint8(expectedLen) {
 				err = ErrProtocolError
@@ -654,36 +643,28 @@ func (ms *ModbusServer) handleTransport(t transport, clientAddr string, clientRo
 		// and log an error
 		if err == nil && res == nil {
 			err = ErrServerDeviceFailure
-			ms.logger.Errorf("internal server error (req: %v, res: %v, err: %v)",
-				req, res, err)
+			ms.logger.Errorf("internal server error (req: %v, res: %v, err: %v)", req, res, err)
 		}
 
 		// map go errors to modbus errors, unless the error is a protocol error,
 		// in which case close the transport and return.
 		if err != nil {
 			if err == ErrProtocolError {
-				ms.logger.Warningf(
-					"protocol error, closing link (client address: '%s')",
-					clientAddr)
+				ms.logger.Warningf("protocol error, closing link (client address: '%s')", clientAddr)
 				t.Close()
 				return
-			} else {
-				res = &pdu{
-					unitId:       req.unitId,
-					functionCode: (0x80 | req.functionCode),
-					payload:      []byte{mapErrorToExceptionCode(err)},
-				}
+			}
+
+			res = &pdu{
+				unitId:       req.unitId,
+				functionCode: (0x80 | req.functionCode),
+				payload:      []byte{mapErrorToExceptionCode(err)},
 			}
 		}
 
 		// write the response to the transport
-		err = t.WriteResponse(res)
-		if err != nil {
+		if err := t.WriteResponse(res); err != nil {
 			ms.logger.Warningf("failed to write response: %v", err)
 		}
-
-		// avoid holding on to stale data
-		req = nil
-		res = nil
 	}
 }
