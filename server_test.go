@@ -9,14 +9,10 @@ import (
 )
 
 func TestTCPServerWithConcurrentConnections(t *testing.T) {
-	var server *ModbusServer
-	var err error
 	var coils []bool
 	var c1, c2, c3 *modbus.ModbusClient
 
-	th := &tcpTestHandler{}
-
-	server, err = New(th, MaxClients(2))
+	server, err := New(new(tcpTestHandler), MaxClients(2))
 	if err != nil {
 		t.Errorf("failed to create server: %v", err)
 	}
@@ -54,8 +50,7 @@ func TestTCPServerWithConcurrentConnections(t *testing.T) {
 	// the server should have zero client connections so far
 	server.lock.Lock()
 	if len(server.tcpClients) != 0 {
-		t.Errorf("expected server.tcpClients to hold 0 entries, got: %v",
-			len(server.tcpClients))
+		t.Errorf("expected server.tcpClients to hold 0 entries, got: %v", len(server.tcpClients))
 	}
 	server.lock.Unlock()
 
@@ -69,8 +64,7 @@ func TestTCPServerWithConcurrentConnections(t *testing.T) {
 	time.Sleep(time.Millisecond)
 	server.lock.Lock()
 	if len(server.tcpClients) != 1 {
-		t.Errorf("expected server.tcpClients to hold 1 entry, got: %v",
-			len(server.tcpClients))
+		t.Errorf("expected server.tcpClients to hold 1 entry, got: %v", len(server.tcpClients))
 	}
 	server.lock.Unlock()
 
@@ -84,8 +78,7 @@ func TestTCPServerWithConcurrentConnections(t *testing.T) {
 	// the server should now have 2 client connections, its maximum allowed
 	server.lock.Lock()
 	if len(server.tcpClients) != 2 {
-		t.Errorf("expected server.tcpClients to hold 2 entries, got: %v",
-			len(server.tcpClients))
+		t.Errorf("expected server.tcpClients to hold 2 entries, got: %v", len(server.tcpClients))
 	}
 	server.lock.Unlock()
 
@@ -99,8 +92,7 @@ func TestTCPServerWithConcurrentConnections(t *testing.T) {
 	// should stay at 2
 	server.lock.Lock()
 	if len(server.tcpClients) != 2 {
-		t.Errorf("expected server.tcpClients to hold 2 entries, got: %v",
-			len(server.tcpClients))
+		t.Errorf("expected server.tcpClients to hold 2 entries, got: %v", len(server.tcpClients))
 	}
 	server.lock.Unlock()
 
@@ -132,8 +124,7 @@ func TestTCPServerWithConcurrentConnections(t *testing.T) {
 	time.Sleep(time.Millisecond)
 	server.lock.Lock()
 	if len(server.tcpClients) != 1 {
-		t.Errorf("expected server.tcpClients to hold 1 entry, got: %v",
-			len(server.tcpClients))
+		t.Errorf("expected server.tcpClients to hold 1 entry, got: %v", len(server.tcpClients))
 	}
 	server.lock.Unlock()
 
@@ -150,8 +141,7 @@ func TestTCPServerWithConcurrentConnections(t *testing.T) {
 
 	server.lock.Lock()
 	if len(server.tcpClients) != 2 {
-		t.Errorf("expected server.tcpClients to hold 2 entries, got: %v",
-			len(server.tcpClients))
+		t.Errorf("expected server.tcpClients to hold 2 entries, got: %v", len(server.tcpClients))
 	}
 	server.lock.Unlock()
 
@@ -169,8 +159,7 @@ func TestTCPServerWithConcurrentConnections(t *testing.T) {
 	time.Sleep(time.Millisecond)
 	server.lock.Lock()
 	if len(server.tcpClients) != 1 {
-		t.Errorf("expected server.tcpClients to hold 1 entry, got: %v",
-			len(server.tcpClients))
+		t.Errorf("expected server.tcpClients to hold 1 entry, got: %v", len(server.tcpClients))
 	}
 	server.lock.Unlock()
 
@@ -180,8 +169,7 @@ func TestTCPServerWithConcurrentConnections(t *testing.T) {
 	time.Sleep(time.Millisecond)
 	server.lock.Lock()
 	if len(server.tcpClients) != 0 {
-		t.Errorf("expected server.tcpClients to hold 0 entries, got: %v",
-			len(server.tcpClients))
+		t.Errorf("expected server.tcpClients to hold 0 entries, got: %v", len(server.tcpClients))
 	}
 	server.lock.Unlock()
 
@@ -193,15 +181,13 @@ func TestTCPServerWithConcurrentConnections(t *testing.T) {
 }
 
 func TestTCPServerCoilsAndDiscreteInputs(t *testing.T) {
-	var server *ModbusServer
-	var err error
 	var coils []bool
 	var dis []bool
 	var client *modbus.ModbusClient
 
 	th := &tcpTestHandler{}
 
-	server, err = New(th)
+	server, err := New(th)
 	if err != nil {
 		t.Errorf("failed to create server: %v", err)
 	}
@@ -359,15 +345,13 @@ func TestTCPServerCoilsAndDiscreteInputs(t *testing.T) {
 }
 
 func TestTCPServerHoldingAndInputRegisters(t *testing.T) {
-	var server *ModbusServer
-	var err error
 	var client *modbus.ModbusClient
 	var th *tcpTestHandler
 	var regs []uint16
 
 	th = &tcpTestHandler{}
 
-	server, err = New(th)
+	server, err := New(th)
 	if err != nil {
 		t.Errorf("failed to create server: %v", err)
 	}
@@ -416,8 +400,7 @@ func TestTCPServerHoldingAndInputRegisters(t *testing.T) {
 	}
 	for i := 0; i < 10; i++ {
 		if regs[i] != 0xa710+uint16(i) {
-			t.Errorf("expected 0x%04x at position %v, got: 0x%04x",
-				0xa710+uint16(i), i, regs[i])
+			t.Errorf("expected 0x%04x at position %v, got: 0x%04x", 0xa710+uint16(i), i, regs[i])
 		}
 	}
 
@@ -504,8 +487,7 @@ func TestTCPServerHoldingAndInputRegisters(t *testing.T) {
 	}
 	for i := 0; i < 10; i++ {
 		if regs[i] != 0x0c00+uint16(0x11*i) {
-			t.Errorf("expected ox%04x at position %v, got: 0x%04x",
-				0x0c00+uint16(0x11*i), i, regs[i])
+			t.Errorf("expected ox%04x at position %v, got: 0x%04x", 0x0c00+uint16(0x11*i), i, regs[i])
 		}
 	}
 
