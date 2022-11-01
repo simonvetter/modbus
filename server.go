@@ -11,7 +11,6 @@ import (
 // Request object passed to the coil handler.
 type CoilsRequest struct {
 	ClientAddr string // the source (client) IP address
-	ClientRole string // the client role as encoded in the client certificate (tcp+tls only)
 	UnitId     uint8  // the requested unit id (slave id)
 	Addr       uint16 // the base coil address requested
 	Quantity   uint16 // the number of consecutive coils covered by this request
@@ -24,7 +23,6 @@ type CoilsRequest struct {
 // Request object passed to the discrete input handler.
 type DiscreteInputsRequest struct {
 	ClientAddr string // the source (client) IP address
-	ClientRole string // the client role as encoded in the client certificate (tcp+tls only)
 	UnitId     uint8  // the requested unit id (slave id)
 	Addr       uint16 // the base discrete input address requested
 	Quantity   uint16 // the number of consecutive discrete inputs covered by this request
@@ -33,7 +31,6 @@ type DiscreteInputsRequest struct {
 // Request object passed to the holding register handler.
 type HoldingRegistersRequest struct {
 	ClientAddr string   // the source (client) IP address
-	ClientRole string   // the client role as encoded in the client certificate (tcp+tls only)
 	UnitId     uint8    // the requested unit id (slave id)
 	Addr       uint16   // the base register address requested
 	Quantity   uint16   // the number of consecutive registers covered by this request
@@ -45,7 +42,6 @@ type HoldingRegistersRequest struct {
 // Request object passed to the input register handler.
 type InputRegistersRequest struct {
 	ClientAddr string // the source (client) IP address
-	ClientRole string // the client role as encoded in the client certificate (tcp+tls only)
 	UnitId     uint8  // the requested unit id (slave id)
 	Addr       uint16 // the base register address requested
 	Quantity   uint16 // the number of consecutive registers covered by this request
@@ -246,9 +242,7 @@ func (ms *ModbusServer) acceptTCPClients() {
 // out, or an unrecoverable error happened), the TCP socket is closed and removed
 // from the list of active client connections.
 func (ms *ModbusServer) handleTCPClient(sock net.Conn) {
-	ms.handleTransport(
-		newTCPTransport(sock, ms.Timeout),
-		sock.RemoteAddr().String(), "")
+	ms.handleTransport(newTCPTransport(sock, ms.Timeout), sock.RemoteAddr().String())
 
 	// once done, remove our connection from the list of active client conns
 	ms.lock.Lock()
@@ -268,7 +262,7 @@ func (ms *ModbusServer) handleTCPClient(sock net.Conn) {
 // For each request read from the transport, performs decoding and validation,
 // calls the user-provided handler, then encodes and writes the response
 // to the transport.
-func (ms *ModbusServer) handleTransport(t transport, clientAddr string, clientRole string) {
+func (ms *ModbusServer) handleTransport(t transport, clientAddr string) {
 	for {
 		req, err := t.ReadRequest()
 		if err != nil {
@@ -306,7 +300,6 @@ func (ms *ModbusServer) handleTransport(t transport, clientAddr string, clientRo
 			if req.functionCode == fcReadCoils {
 				coils, err = ms.handler.HandleCoils(&CoilsRequest{
 					ClientAddr: clientAddr,
-					ClientRole: clientRole,
 					UnitId:     req.unitId,
 					Addr:       addr,
 					Quantity:   quantity,
@@ -317,7 +310,6 @@ func (ms *ModbusServer) handleTransport(t transport, clientAddr string, clientRo
 				coils, err = ms.handler.HandleDiscreteInputs(
 					&DiscreteInputsRequest{
 						ClientAddr: clientAddr,
-						ClientRole: clientRole,
 						UnitId:     req.unitId,
 						Addr:       addr,
 						Quantity:   quantity,
@@ -371,7 +363,6 @@ func (ms *ModbusServer) handleTransport(t transport, clientAddr string, clientRo
 			// invoke the coil handler
 			_, err = ms.handler.HandleCoils(&CoilsRequest{
 				ClientAddr: clientAddr,
-				ClientRole: clientRole,
 				UnitId:     req.unitId,
 				Addr:       addr,
 				Quantity:   1,    // request for a single coil
@@ -436,7 +427,6 @@ func (ms *ModbusServer) handleTransport(t transport, clientAddr string, clientRo
 			// invoke the coil handler
 			_, err = ms.handler.HandleCoils(&CoilsRequest{
 				ClientAddr: clientAddr,
-				ClientRole: clientRole,
 				UnitId:     req.unitId,
 				Addr:       addr,
 				Quantity:   quantity,
@@ -487,7 +477,6 @@ func (ms *ModbusServer) handleTransport(t transport, clientAddr string, clientRo
 				regs, err = ms.handler.HandleHoldingRegisters(
 					&HoldingRegistersRequest{
 						ClientAddr: clientAddr,
-						ClientRole: clientRole,
 						UnitId:     req.unitId,
 						Addr:       addr,
 						Quantity:   quantity,
@@ -498,7 +487,6 @@ func (ms *ModbusServer) handleTransport(t transport, clientAddr string, clientRo
 				regs, err = ms.handler.HandleInputRegisters(
 					&InputRegistersRequest{
 						ClientAddr: clientAddr,
-						ClientRole: clientRole,
 						UnitId:     req.unitId,
 						Addr:       addr,
 						Quantity:   quantity,
@@ -544,7 +532,6 @@ func (ms *ModbusServer) handleTransport(t transport, clientAddr string, clientRo
 			_, err = ms.handler.HandleHoldingRegisters(
 				&HoldingRegistersRequest{
 					ClientAddr: clientAddr,
-					ClientRole: clientRole,
 					UnitId:     req.unitId,
 					Addr:       addr,
 					Quantity:   1,    // request for a single register
@@ -605,7 +592,6 @@ func (ms *ModbusServer) handleTransport(t transport, clientAddr string, clientRo
 			_, err = ms.handler.HandleHoldingRegisters(
 				&HoldingRegistersRequest{
 					ClientAddr: clientAddr,
-					ClientRole: clientRole,
 					UnitId:     req.unitId,
 					Addr:       addr,
 					Quantity:   quantity,

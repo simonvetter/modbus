@@ -376,3 +376,12 @@ func feedTestPipe(t *testing.T, in chan []byte, out io.WriteCloser) {
 		}
 	}
 }
+
+func BenchmarkPackager(b *testing.B) {
+	tt := new(tcpTransport)
+	pdu := &pdu{1, 2, []byte{0, 1, 2, 3}}
+
+	for i := 0; i < b.N; i++ {
+		tt.assembleMBAPFrame(uint16(i), pdu)
+	}
+}

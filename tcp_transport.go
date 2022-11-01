@@ -21,73 +21,58 @@ type tcpTransport struct {
 }
 
 // Returns a new TCP transport.
-func newTCPTransport(socket net.Conn, timeout time.Duration) (tt *tcpTransport) {
-	tt = &tcpTransport{
+func newTCPTransport(socket net.Conn, timeout time.Duration) *tcpTransport {
+	return &tcpTransport{
 		socket:  socket,
 		timeout: timeout,
 		logger:  newLogger(fmt.Sprintf("tcp-transport(%s)", socket.RemoteAddr())),
 	}
-
-	return
 }
 
 // Closes the underlying tcp socket.
 func (tt *tcpTransport) Close() (err error) {
-	err = tt.socket.Close()
-
-	return
+	return tt.socket.Close()
 }
 
 // Runs a request across the socket and returns a response.
-func (tt *tcpTransport) ExecuteRequest(req *pdu) (res *pdu, err error) {
+func (tt *tcpTransport) ExecuteRequest(req *pdu) (*pdu, error) {
 	// set an i/o deadline on the socket (read and write)
-	err = tt.socket.SetDeadline(time.Now().Add(tt.timeout))
-	if err != nil {
-		return
+	if err := tt.socket.SetDeadline(time.Now().Add(tt.timeout)); err != nil {
+		return nil, err
 	}
 
 	// increase the transaction ID counter
 	tt.lastTxnId++
 
-	_, err = tt.socket.Write(tt.assembleMBAPFrame(tt.lastTxnId, req))
-	if err != nil {
-		return
+	if _, err := tt.socket.Write(tt.assembleMBAPFrame(tt.lastTxnId, req)); err != nil {
+		return nil, err
 	}
 
-	res, err = tt.readResponse()
-
-	return
+	return tt.readResponse()
 }
 
 // Reads a request from the socket.
-func (tt *tcpTransport) ReadRequest() (req *pdu, err error) {
-	var txnId uint16
-
+func (tt *tcpTransport) ReadRequest() (*pdu, error) {
 	// set an i/o deadline on the socket (read and write)
-	err = tt.socket.SetDeadline(time.Now().Add(tt.timeout))
-	if err != nil {
-		return
+	if err := tt.socket.SetDeadline(time.Now().Add(tt.timeout)); err != nil {
+		return nil, err
 	}
 
-	req, txnId, err = tt.readMBAPFrame()
+	req, txnId, err := tt.readMBAPFrame()
 	if err != nil {
-		return
+		return nil, err
 	}
 
 	// store the incoming transaction id
 	tt.lastTxnId = txnId
 
-	return
+	return req, err
 }
 
 // Writes a response to the socket.
 func (tt *tcpTransport) WriteResponse(res *pdu) (err error) {
 	_, err = tt.socket.Write(tt.assembleMBAPFrame(tt.lastTxnId, res))
-	if err != nil {
-		return
-	}
-
-	return
+	return err
 }
 
 // Reads as many MBAP+modbus frames as necessary until either the response
@@ -111,41 +96,31 @@ func (tt *tcpTransport) readResponse() (res *pdu, err error) {
 
 		// ignore unknown transaction identifiers
 		if tt.lastTxnId != txnId {
-			tt.logger.Warningf("received unexpected transaction id "+
-				"(expected 0x%04x, received 0x%04x)",
-				tt.lastTxnId, txnId)
+			tt.logger.Warningf("received unexpected transaction id (expected 0x%04x, received 0x%04x)", tt.lastTxnId, txnId)
 			continue
 		}
 
-		break
+		return
 	}
-
-	return
 }
 
 // Reads an entire frame (MBAP header + modbus PDU) from the socket.
 func (tt *tcpTransport) readMBAPFrame() (p *pdu, txnId uint16, err error) {
-	var rxbuf []byte
-	var bytesNeeded int
-	var protocolId uint16
-	var unitId uint8
-
 	// read the MBAP header
-	rxbuf = make([]byte, mbapHeaderLength)
-	_, err = io.ReadFull(tt.socket, rxbuf)
-	if err != nil {
+	rxbuf := make([]byte, mbapHeaderLength)
+	if _, err = io.ReadFull(tt.socket, rxbuf); err != nil {
 		return
 	}
 
 	// decode the transaction identifier
 	txnId = binary.BigEndian.Uint16(rxbuf[0:2])
 	// decode the protocol identifier
-	protocolId = binary.BigEndian.Uint16(rxbuf[2:4])
+	protocolId := binary.BigEndian.Uint16(rxbuf[2:4])
 	// store the source unit id
-	unitId = rxbuf[6]
+	unitId := rxbuf[6]
 
 	// determine how many more bytes we need to read
-	bytesNeeded = int(binary.BigEndian.Uint16(rxbuf[4:6]))
+	bytesNeeded := int(binary.BigEndian.Uint16(rxbuf[4:6]))
 
 	// the byte count includes the unit ID field, which we already have
 	bytesNeeded--
@@ -164,8 +139,7 @@ func (tt *tcpTransport) readMBAPFrame() (p *pdu, txnId uint16, err error) {
 
 	// read the PDU
 	rxbuf = make([]byte, bytesNeeded)
-	_, err = io.ReadFull(tt.socket, rxbuf)
-	if err != nil {
+	if _, err = io.ReadFull(tt.socket, rxbuf); err != nil {
 		return
 	}
 
@@ -187,9 +161,10 @@ func (tt *tcpTransport) readMBAPFrame() (p *pdu, txnId uint16, err error) {
 }
 
 // Turns a PDU into an MBAP frame (MBAP header + PDU) and returns it as bytes.
-func (tt *tcpTransport) assembleMBAPFrame(txnId uint16, p *pdu) (payload []byte) {
+func (tt *tcpTransport) assembleMBAPFrame(txnId uint16, p *pdu) []byte {
+	payload := make([]byte, 0, 8+len(p.payload))
 	// transaction identifier
-	payload = asBytes(binary.BigEndian, txnId)
+	payload = append(payload, asBytes(binary.BigEndian, txnId)...)
 	// protocol identifier (always 0x0000)
 	payload = append(payload, 0x00, 0x00)
 	// length (covers unit identifier + function code + payload fields)
@@ -201,5 +176,5 @@ func (tt *tcpTransport) assembleMBAPFrame(txnId uint16, p *pdu) (payload []byte)
 	// payload
 	payload = append(payload, p.payload...)
 
-	return
+	return payload
 }
