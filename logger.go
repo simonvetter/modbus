@@ -5,6 +5,19 @@ import (
 	"os"
 )
 
+type LeveledLogger interface {
+	Info(msg string)
+	Infof(format string, msg ...interface{})
+	Warning(msg string)
+	Warningf(format string, msg ...interface{})
+	Error(msg string)
+	Errorf(format string, msg ...interface{})
+	Fatal(msg string)
+	Fatalf(format string, msg ...interface{})
+}
+
+var _ LeveledLogger = (*logger)(nil)
+
 type logger struct {
 	prefix string
 }

@@ -114,7 +114,7 @@ type ModbusServer struct {
 	Timeout time.Duration
 	// MaxClients sets the maximum number of concurrent client connections
 	MaxClients  uint
-	logger      *logger
+	logger      LeveledLogger
 	lock        sync.Mutex
 	handler     RequestHandler
 	tcpListener net.Listener
@@ -122,6 +122,14 @@ type ModbusServer struct {
 }
 
 type Option func(*ModbusServer) error
+
+// Logger is the modbus server logger option
+func Logger(logger LeveledLogger) func(*ModbusServer) error {
+	return func(ms *ModbusServer) error {
+		ms.logger = logger
+		return nil
+	}
+}
 
 // Timeout is the modbus server timeout option
 func Timeout(timeout time.Duration) func(*ModbusServer) error {
