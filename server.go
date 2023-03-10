@@ -10,10 +10,11 @@ import (
 
 // Request object passed to the coil handler.
 type CoilsRequest struct {
-	ClientAddr string // the source (client) IP address
-	UnitId     uint8  // the requested unit id (slave id)
-	Addr       uint16 // the base coil address requested
-	Quantity   uint16 // the number of consecutive coils covered by this request
+	WriteFuncCode uint8  // the function code of the write request
+	ClientAddr    string // the source (client) IP address
+	UnitId        uint8  // the requested unit id (slave id)
+	Addr          uint16 // the base coil address requested
+	Quantity      uint16 // the number of consecutive coils covered by this request
 	// (first address: Addr, last address: Addr + Quantity - 1)
 	IsWrite bool   // true if the request is a write, false if a read
 	Args    []bool // a slice of bool values of the coils to be set, ordered
@@ -30,12 +31,13 @@ type DiscreteInputsRequest struct {
 
 // Request object passed to the holding register handler.
 type HoldingRegistersRequest struct {
-	ClientAddr string   // the source (client) IP address
-	UnitId     uint8    // the requested unit id (slave id)
-	Addr       uint16   // the base register address requested
-	Quantity   uint16   // the number of consecutive registers covered by this request
-	IsWrite    bool     // true if the request is a write, false if a read
-	Args       []uint16 // a slice of register values to be set, ordered from
+	WriteFuncCode uint8    // the function code of the write request
+	ClientAddr    string   // the source (client) IP address
+	UnitId        uint8    // the requested unit id (slave id)
+	Addr          uint16   // the base register address requested
+	Quantity      uint16   // the number of consecutive registers covered by this request
+	IsWrite       bool     // true if the request is a write, false if a read
+	Args          []uint16 // a slice of register values to be set, ordered from
 	// Addr to Addr + Quantity - 1 (for writes only)
 }
 
@@ -362,12 +364,13 @@ func (ms *ModbusServer) handleTransport(t transport, clientAddr string) {
 
 			// invoke the coil handler
 			_, err = ms.handler.HandleCoils(&CoilsRequest{
-				ClientAddr: clientAddr,
-				UnitId:     req.unitId,
-				Addr:       addr,
-				Quantity:   1,    // request for a single coil
-				IsWrite:    true, // this is a write request
-				Args:       []bool{(req.payload[2] == 0xff)},
+				WriteFuncCode: fcWriteSingleCoil,
+				ClientAddr:    clientAddr,
+				UnitId:        req.unitId,
+				Addr:          addr,
+				Quantity:      1,    // request for a single coil
+				IsWrite:       true, // this is a write request
+				Args:          []bool{(req.payload[2] == 0xff)},
 			})
 
 			if err != nil {
@@ -426,12 +429,13 @@ func (ms *ModbusServer) handleTransport(t transport, clientAddr string) {
 
 			// invoke the coil handler
 			_, err = ms.handler.HandleCoils(&CoilsRequest{
-				ClientAddr: clientAddr,
-				UnitId:     req.unitId,
-				Addr:       addr,
-				Quantity:   quantity,
-				IsWrite:    true, // this is a write request
-				Args:       decodeBools(quantity, req.payload[5:]),
+				WriteFuncCode: fcWriteMultipleCoils,
+				ClientAddr:    clientAddr,
+				UnitId:        req.unitId,
+				Addr:          addr,
+				Quantity:      quantity,
+				IsWrite:       true, // this is a write request
+				Args:          decodeBools(quantity, req.payload[5:]),
 			})
 
 			if err != nil {
@@ -531,12 +535,13 @@ func (ms *ModbusServer) handleTransport(t transport, clientAddr string) {
 			// invoke the handler
 			_, err = ms.handler.HandleHoldingRegisters(
 				&HoldingRegistersRequest{
-					ClientAddr: clientAddr,
-					UnitId:     req.unitId,
-					Addr:       addr,
-					Quantity:   1,    // request for a single register
-					IsWrite:    true, // request is a write
-					Args:       []uint16{value},
+					WriteFuncCode: fcWriteSingleRegister,
+					ClientAddr:    clientAddr,
+					UnitId:        req.unitId,
+					Addr:          addr,
+					Quantity:      1,    // request for a single register
+					IsWrite:       true, // request is a write
+					Args:          []uint16{value},
 				})
 
 			if err != nil {
@@ -591,12 +596,13 @@ func (ms *ModbusServer) handleTransport(t transport, clientAddr string) {
 			// invoke the holding register handler
 			_, err = ms.handler.HandleHoldingRegisters(
 				&HoldingRegistersRequest{
-					ClientAddr: clientAddr,
-					UnitId:     req.unitId,
-					Addr:       addr,
-					Quantity:   quantity,
-					IsWrite:    true, // this is a write request
-					Args:       bytesToUint16(binary.BigEndian, req.payload[5:]),
+					WriteFuncCode: fcWriteMultipleRegisters,
+					ClientAddr:    clientAddr,
+					UnitId:        req.unitId,
+					Addr:          addr,
+					Quantity:      quantity,
+					IsWrite:       true, // this is a write request
+					Args:          bytesToUint16(binary.BigEndian, req.payload[5:]),
 				})
 			if err != nil {
 				break
