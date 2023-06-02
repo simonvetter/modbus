@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"testing"
+	"time"
 )
 
 const (
@@ -332,6 +333,115 @@ func TestTCPoverTLSClient(t *testing.T) {
 	if err != nil {
 		t.Errorf("Close() should have succeeded, got: %v", err)
 	}
+
+	return
+}
+
+func TestTLSClientOnServerTimeout(t *testing.T) {
+	var err            error
+	var client         *ModbusClient
+	var server         *ModbusServer
+	var serverKeyPair  tls.Certificate
+	var clientKeyPair  tls.Certificate
+	var clientCp       *x509.CertPool
+	var serverCp       *x509.CertPool
+	var th	           *tlsTestHandler
+	var reg            uint16
+
+	th = &tlsTestHandler{}
+	// load server and client keypairs
+	serverKeyPair, err = tls.X509KeyPair([]byte(serverCert), []byte(serverKey))
+	if err != nil {
+		t.Errorf("failed to load test server key pair: %v", err)
+		return
+	}
+
+	clientKeyPair, err = tls.X509KeyPair([]byte(clientCert), []byte(clientKey))
+	if err != nil {
+		t.Errorf("failed to load test client key pair: %v", err)
+		return
+	}
+
+	// add those keypairs to their corresponding cert pool
+	clientCp = x509.NewCertPool()
+	if !clientCp.AppendCertsFromPEM([]byte(serverCert)) {
+		t.Errorf("failed to load test server cert into cert pool")
+	}
+
+	serverCp = x509.NewCertPool()
+	if !serverCp.AppendCertsFromPEM([]byte(clientCert)) {
+		t.Errorf("failed to load client cert into cert pool")
+	}
+
+
+	// load the server cert into the client CA cert pool to get the server cert
+	// accepted by clients
+	clientCp = x509.NewCertPool()
+	if !clientCp.AppendCertsFromPEM([]byte(serverCert)) {
+		t.Errorf("failed to load test server cert into cert pool")
+	}
+
+	server, err = NewServer(&ServerConfiguration{
+		URL:           "tcp+tls://[::1]:5802",
+		MaxClients:    10,
+		TLSServerCert: &serverKeyPair,
+		TLSClientCAs:  serverCp,
+		// disconnect idle clients after 500ms
+		Timeout:       500 * time.Millisecond,
+	}, th)
+	if err != nil {
+		t.Errorf("failed to create server: %v", err)
+	}
+
+	err = server.Start()
+	if err != nil {
+		t.Errorf("failed to start server: %v", err)
+	}
+
+	// create the modbus client
+	client, err	= NewClient(&ClientConfiguration{
+		URL:           "tcp+tls://localhost:5802",
+		TLSClientCert: &clientKeyPair,
+		TLSRootCAs:    clientCp,
+	})
+	if err != nil {
+		t.Errorf("failed to create client: %v", err)
+	}
+
+	// connect to the server: should succeed
+	err = client.Open()
+	if err != nil {
+		t.Errorf("Open() should have succeeded, got: %v", err)
+	}
+
+	// write a value to register #3: should succeed
+	err = client.WriteRegister(3, 0x0199)
+	if err != nil {
+		t.Errorf("Write() should have succeeded, got: %v", err)
+	}
+
+	// attempt to read the value back: should succeed
+	reg, err = client.ReadRegister(3, HOLDING_REGISTER)
+	if err != nil {
+		t.Errorf("ReadRegisters() should have succeeded, got: %v", err)
+	}
+	if reg != 0x0199 {
+		t.Errorf("expected 0x0199 in reg #3, saw: 0x%04x", reg)
+	}
+
+	// pause for longer than the server's configured timeout to end up with
+	// an open client with a closed underlying TCP socket
+	time.Sleep(1 * time.Second)
+
+	// attempt a read: should fail
+	_, err = client.ReadRegister(3, INPUT_REGISTER)
+	if err == nil {
+		t.Errorf("ReadRegister() should have failed")
+	}
+
+	// cleanup
+	client.Close()
+	server.Stop()
 
 	return
 }

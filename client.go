@@ -292,8 +292,11 @@ func (mc *ModbusClient) Open() (err error) {
 			return
 		}
 
-		// create the TCP transport
-		mc.transport = newTCPTransport(sock, mc.conf.Timeout, mc.conf.Logger)
+		// create the TCP transport, wrapping the TLS socket in
+		// an adapter to work around write timeouts corrupting internal
+		// state (see https://pkg.go.dev/crypto/tls#Conn.SetWriteDeadline)
+		mc.transport = newTCPTransport(
+			newTLSSockWrapper(sock), mc.conf.Timeout, mc.conf.Logger)
 
 	case modbusTCPOverUDP:
 		// open a socket to the remote host (note: no actual connection is
