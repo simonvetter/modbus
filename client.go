@@ -321,8 +321,10 @@ func (mc *ModbusClient) Open() (err error) {
 func (mc *ModbusClient) Close() (err error) {
 	mc.lock.Lock()
 	defer mc.lock.Unlock()
-
-	err = mc.transport.Close()
+	
+	if mc.transport != nil {
+		err = mc.transport.Close()
+	}
 
 	return
 }
