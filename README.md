@@ -33,14 +33,14 @@ $ ./modbus-cli --help
 
 ### Getting started
 ```bash
-$ go get github.com/simonvetter/modbus
+$ go get github.com/NubeIO/go-modbus-fork
 ```
 
 ### Using the client
 
 ```golang
 import (
-    "github.com/simonvetter/modbus"
+    "github.com/NubeIO/go-modbus-fork"
 )
 
 func main() {
