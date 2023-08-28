@@ -1,4 +1,4 @@
-module github.com/simonvetter/modbus
+module github.com/NubeIO/go-modbus-fork
 
 go 1.16
 

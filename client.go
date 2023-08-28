@@ -871,6 +871,187 @@ func (mc *ModbusClient) WriteRawBytes(addr uint16, values []byte) (err error) {
 	return
 }
 
+// Reads content of a file given its file number, starting record to read and number of records to read.
+// Returns content of the file starting from the given record number till end of file or number of records to read.
+func (mc *ModbusClient) ReadFileRecord(fileNumber uint16, recNumber uint16, recCount uint16) (bytes []byte, err error) {
+	var req *pdu
+	var res *pdu
+
+	mc.lock.Lock()
+	defer mc.lock.Unlock()
+
+	// create and fill in the request object
+	req = &pdu{
+		unitId:       mc.unitId,
+		functionCode: fcReadFileRecord,
+	}
+
+	if recCount == 0 || recCount > 124 {
+		err = ErrUnexpectedParameters
+		mc.logger.Error("recCount must be between 1 and 124")
+		return
+	}
+
+	if recNumber + recCount > 10000 {
+		err = ErrUnexpectedParameters
+		mc.logger.Error("a file cannot have more than 10000 records")
+		return
+	}
+
+	// byte count
+	req.payload = append(req.payload, byte(7))
+	// reference type
+	req.payload = append(req.payload, byte(6))
+	// file number
+	req.payload = append(req.payload, uint16ToBytes(BIG_ENDIAN, fileNumber)...)
+	// record number
+	req.payload = append(req.payload, uint16ToBytes(BIG_ENDIAN, recNumber)...)
+	// record length
+	req.payload = append(req.payload, uint16ToBytes(BIG_ENDIAN, recCount)...)
+
+	// run the request across the transport and wait for a response
+	res, err = mc.executeRequest(req)
+	if err != nil {
+		return
+	}
+
+	// validate the response code
+	switch {
+	case res.functionCode == req.functionCode:
+		// make sure the payload length is valid
+		// (1 byte of response data length + 1 byte of file data length + 1 byte of reference type + 2 bytes per record)
+		if len(res.payload) < 1 + 1 + 1 + 2 || len(res.payload) % 2 != 1 {
+			err = ErrProtocolError
+			return
+		}
+
+		// validate response data length
+		if res.payload[0] != byte(len(res.payload) - 1) {
+			err = ErrProtocolError
+			return
+		}
+
+		// validate file data length
+		if res.payload[1] != byte(len(res.payload) - 1 - 1) {
+			err = ErrProtocolError
+			return
+		}
+
+		// validate reference type
+		if res.payload[2] != 6 {
+			err = ErrProtocolError
+			return
+		}
+
+		// remove all overhead from the returned slice
+		bytes = res.payload[3:]
+
+	case res.functionCode == (req.functionCode | 0x80):
+		if len(res.payload) != 1 {
+			err = ErrProtocolError
+			return
+		}
+
+		err = mapExceptionCodeToError(res.payload[0])
+
+	default:
+		err = ErrProtocolError
+		mc.logger.Warningf("unexpected response code (%v)", res.functionCode)
+	}
+
+	return
+}
+
+// Writes content of a file given its file number, starting record to write and the data to write.
+// The content to write to the file is passed as bytes, length of the content must be an even number.
+func (mc *ModbusClient) WriteFileRecord(fileNumber uint16, recNumber uint16, bytes []byte) (err error) {
+	var req        *pdu
+	var res        *pdu
+	var dataLength uint16
+	var recCount   uint16
+
+	mc.lock.Lock()
+	defer mc.lock.Unlock()
+
+	dataLength = uint16(len(bytes))
+	recCount   = dataLength / 2
+
+	if dataLength % 2 != 0 {
+		err = ErrUnexpectedParameters
+		mc.logger.Error("length of the data to write must be an even number")
+		return
+	}
+
+	if recNumber + recCount > 10000 {
+		err = ErrUnexpectedParameters
+		mc.logger.Error("a file cannot have more than 10000 records")
+		return
+	}
+
+	if recCount > 122 {
+		err = ErrUnexpectedParameters
+		mc.logger.Error("quantity of records exceeds 122")
+		return
+	}
+
+	// create and fill in the request object
+	req	= &pdu{
+		unitId:	      mc.unitId,
+		functionCode: fcWriteFileRecord,
+	}
+
+	// byte count
+	req.payload = append(req.payload, byte(7 + dataLength))
+	// reference type
+	req.payload = append(req.payload, byte(6))
+	// file number
+	req.payload = append(req.payload, uint16ToBytes(BIG_ENDIAN, fileNumber)...)
+	// record number
+	req.payload = append(req.payload, uint16ToBytes(BIG_ENDIAN, recNumber)...)
+	// record length
+	req.payload = append(req.payload, uint16ToBytes(BIG_ENDIAN, recCount)...)
+	// record data
+	req.payload = append(req.payload, bytes...)
+
+	// run the request across the transport and wait for a response
+	res, err = mc.executeRequest(req)
+	if err != nil {
+		return
+	}
+
+	// validate the response code
+	switch {
+	case res.functionCode == req.functionCode:
+		// make sure the payload length of the response is same as that of the request
+		if len(res.payload) != len(req.payload) {
+			err = ErrProtocolError
+			return
+		}
+
+		// the response PDU must be exactly same as the request PDU
+		for i, v := range res.payload {
+			if v != req.payload[i] {
+				err = ErrProtocolError
+				return
+			}
+		}
+
+	case res.functionCode == (req.functionCode | 0x80):
+		if len(res.payload) != 1 {
+			err = ErrProtocolError
+			return
+		}
+
+		err = mapExceptionCodeToError(res.payload[0])
+
+	default:
+		err = ErrProtocolError
+		mc.logger.Warningf("unexpected response code (%v)", res.functionCode)
+	}
+
+	return
+}
+
 /*** unexported methods ***/
 // Reads one or multiple 16-bit registers (function code 03 or 04) as bytes.
 func (mc *ModbusClient) readBytes(addr uint16, quantity uint16, regType RegType, observeEndianness bool) (values []byte, err error) {
