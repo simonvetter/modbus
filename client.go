@@ -1037,11 +1037,13 @@ func (mc *ModbusClient) readRegisters(addr uint16, quantity uint16, regType RegT
 	if quantity == 0 {
 		err = ErrUnexpectedParameters
 		mc.logger.Error("quantity of registers is 0")
+		return
 	}
 
-	if quantity > 123 {
+	if quantity > 125 {
 		err = ErrUnexpectedParameters
-		mc.logger.Error("quantity of registers exceeds 123")
+		mc.logger.Error("quantity of registers exceeds 125")
+		return
 	}
 
 	if uint32(addr) + uint32(quantity) - 1 > 0xffff {
@@ -1113,19 +1115,19 @@ func (mc *ModbusClient) writeRegisters(addr uint16, values []byte) (err error) {
 
 	if quantity == 0 {
 		err = ErrUnexpectedParameters
-		mc.logger.Errorf("quantity of registers is 0")
+		mc.logger.Error("quantity of registers is 0")
 		return
 	}
 
 	if quantity > 123 {
 		err = ErrUnexpectedParameters
-		mc.logger.Errorf("quantity of registers exceeds 123")
+		mc.logger.Error("quantity of registers exceeds 123")
 		return
 	}
 
 	if uint32(addr) + uint32(quantity) - 1 > 0xffff {
 		err = ErrUnexpectedParameters
-		mc.logger.Errorf("end register address is past 0xffff")
+		mc.logger.Error("end register address is past 0xffff")
 		return
 	}
 
