@@ -354,19 +354,21 @@ func main() {
 
 			switch splitArgs[1] {
 			case "c", "coils":
-				o.op		= scanBools
-				o.isCoil	= true
+				o.op           = scanBools
+				o.isCoil       = true
 			case "di", "discreteInputs":
-				o.op		= scanBools
-				o.isCoil	= false
+				o.op           = scanBools
+				o.isCoil       = false
 			case "h", "hr", "holding", "holdingRegisters":
-				o.op		= scanRegisters
-				o.isHoldingReg	= true
+				o.op           = scanRegisters
+				o.isHoldingReg = true
 			case "i", "ir", "input", "inputRegisters":
-				o.op		= scanRegisters
-				o.isHoldingReg	= false
+				o.op           = scanRegisters
+				o.isHoldingReg = false
+			case "s", "sid":
+				o.op           = scanUnitId
 			default:
-				fmt.Printf("unknown register type '%v' (valid options <coils|di|hr|ir>\n",
+				fmt.Printf("unknown scan/register type '%s' (valid options <coils|di|hr|ir|s>\n",
 					   splitArgs[1])
 				os.Exit(2)
 			}
@@ -719,6 +721,9 @@ func main() {
 		case scanRegisters:
 			performRegisterScan(client, o.isHoldingReg)
 
+		case scanUnitId:
+			performUnitIdScan(client)
+
 		case ping:
 			performPing(client, o.quantity, o.duration);
 
@@ -759,6 +764,7 @@ const (
 	date
 	scanBools
 	scanRegisters
+	scanUnitId
 	ping
 )
 
@@ -985,6 +991,45 @@ func performRegisterScan(client *modbus.ModbusClient, isHoldingReg bool) {
 	return
 }
 
+func performUnitIdScan(client *modbus.ModbusClient) {
+	var err            error
+	var countOk        uint
+	var countErr       uint
+	var countTimeout   uint
+	var countGWTimeout uint
+
+	fmt.Println("starting unit id scan")
+
+	for unitId := uint(0); unitId <= 0xff; unitId++ {
+		client.SetUnitId(uint8(unitId))
+
+		_, err = client.ReadRegister(0, modbus.INPUT_REGISTER)
+		switch err {
+		case nil,
+		     modbus.ErrIllegalDataAddress,
+		     modbus.ErrIllegalFunction,
+		     modbus.ErrIllegalDataValue:
+			fmt.Printf("0x%02x (%3v): ok\n", unitId, unitId)
+			countOk++
+
+		case modbus.ErrRequestTimedOut:
+			countTimeout++
+
+		case modbus.ErrGWTargetFailedToRespond:
+			countGWTimeout++
+
+		default:
+			fmt.Printf("0x%02x (%3v): %v\n", unitId, unitId, err)
+			countErr++
+		}
+	}
+
+	fmt.Printf("found %v devices (%v errors, %v timeouts, %v gateway timeouts)\n",
+		countOk, countErr, countTimeout, countGWTimeout)
+
+	return
+}
+
 func performPing(client *modbus.ModbusClient, count uint16, interval time.Duration) {
 	var err           error
 	var okCount       uint
@@ -1173,7 +1218,8 @@ Available commands:
   - "c", "coils",
   - "di", "discreteInputs",
   - "hr", "holdingRegisters",
-  - "ir", "inputRegisters".
+  - "ir", "inputRegisters",
+  - "s", "sid".
 
   scan:hr              scans the device for holding registers.
   scan:di              scans the device for discrete inputs.
@@ -1182,6 +1228,13 @@ Available commands:
   Adresses for which a non-error response is received are listed, along with the value received.
   Errors other than Illegal Data Address and Illegal Function are also shown, as they should
   not happen in sane implementations.
+
+  scan:sid             scans the target for devices.
+
+  Scans all unit IDs (0 to 255) using a single read input register request. Addresses responding
+  positively or with non-timeout errors are shown, while timeouts and gateway timeouts are ignored.
+  This command can be used to find active nodes on RS485 buses, behind gateways or in composite
+  devices.
 
 * ping:<count>[:interval]
   Executes <count> modbus reads (1 holding register at address 0x0000), either back to back or
