@@ -68,6 +68,7 @@ type HoldingRegistersRequest struct {
 	Addr       uint16   // the base register address requested
 	Quantity   uint16   // the number of consecutive registers covered by this request
 	IsWrite    bool     // true if the request is a write, false if a read
+	IsSingle   bool
 	Args       []uint16 // a slice of register values to be set, ordered from
 	                    // Addr to Addr + Quantity - 1 (for writes only)
 }
@@ -672,6 +673,7 @@ func (ms *ModbusServer) handleTransport(t transport, clientAddr string, clientRo
 					Addr:       addr,
 					Quantity:   1, // request for a single register
 					IsWrite:    true, // request is a write
+					IsSingle:   true,
 					Args:       []uint16{value},
 				})
 
@@ -737,6 +739,7 @@ func (ms *ModbusServer) handleTransport(t transport, clientAddr string, clientRo
 					Addr:       addr,
 					Quantity:   quantity,
 					IsWrite:    true, // this is a write request
+					IsSingle:   false,
 					Args:       bytesToUint16s(BIG_ENDIAN, req.payload[5:]),
 				})
 			if err != nil {
