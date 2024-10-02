@@ -1,22 +1,22 @@
 package modbus
 
 import (
-	"testing"
 	"io"
 	"net"
+	"testing"
 	"time"
 )
 
 func TestAssembleRTUFrame(t *testing.T) {
-	var rt		*rtuTransport
-	var frame	[]byte
+	var rt *rtuTransport
+	var frame []byte
 
-	rt		= &rtuTransport{}
+	rt = &rtuTransport{}
 
-	frame		= rt.assembleRTUFrame(&pdu{
-		unitId:		0x33,
-		functionCode:	0x11,
-		payload:	[]byte{0x22, 0x33, 0x44, 0x55},
+	frame = rt.assembleRTUFrame(&pdu{
+		unitId:       0x33,
+		functionCode: 0x11,
+		payload:      []byte{0x22, 0x33, 0x44, 0x55},
 	})
 	// expect 1 byte of unit id, 1 byte of function code, 4 bytes of payload and
 	// 2 bytes of CRC
@@ -34,10 +34,10 @@ func TestAssembleRTUFrame(t *testing.T) {
 		}
 	}
 
-	frame		= rt.assembleRTUFrame(&pdu{
-		unitId:		0x31,
-		functionCode:	0x06,
-		payload:	[]byte{0x12, 0x34},
+	frame = rt.assembleRTUFrame(&pdu{
+		unitId:       0x31,
+		functionCode: 0x06,
+		payload:      []byte{0x12, 0x34},
 	})
 	// expect 1 byte of unit if, 1 byte of function code, 2 bytes of payload and
 	// 2 bytes of CRC
@@ -57,28 +57,26 @@ func TestAssembleRTUFrame(t *testing.T) {
 	return
 }
 
-
 func TestRTUTransportReadRTUFrame(t *testing.T) {
-	var rt		*rtuTransport
-	var p1, p2	net.Conn
-	var txchan	chan []byte
-	var err		error
-	var res		*pdu
+	var rt *rtuTransport
+	var p1, p2 net.Conn
+	var txchan chan []byte
+	var err error
+	var res *pdu
 
-	txchan		= make(chan []byte, 2)
-	p1, p2		= net.Pipe()
+	txchan = make(chan []byte, 2)
+	p1, p2 = net.Pipe()
 	go feedTestPipe(t, txchan, p1)
 
-
-	rt		= newRTUTransport(p2, "", 9600, 10 * time.Millisecond, nil)
+	rt = newRTUTransport(p2, "", 9600, 10*time.Millisecond, nil)
 
 	// read a valid response (illegal data address)
-	txchan		<- []byte{
+	txchan <- []byte{
 		0x31, 0x82, // unit id and response code
 		0x02,       // exception code
 		0xc1, 0x6e, // CRC
 	}
-	res, err	= rt.readRTUFrame()
+	res, err = rt.readRTUFrame()
 	if err != nil {
 		t.Errorf("readRTUFrame() should have succeeded, got %v", err)
 	}
@@ -93,29 +91,29 @@ func TestRTUTransportReadRTUFrame(t *testing.T) {
 	}
 	if res.payload[0] != 0x02 {
 		t.Errorf("expected {0x02} as payload, got {0x%02x}",
-			 res.payload[0])
+			res.payload[0])
 	}
 
 	// read a frame with a bad crc
-	txchan		<- []byte{
+	txchan <- []byte{
 		0x30, 0x82, // unit id and response code
 		0x12,       // exception code
 		0xc0, 0xa2, // CRC
 	}
-	res, err	= rt.readRTUFrame()
+	res, err = rt.readRTUFrame()
 	if err != ErrBadCRC {
 		t.Errorf("readRTUFrame() should have returned ErrBadCrc, got %v", err)
 	}
 
 	// read a longer, valid response
-	txchan		<- []byte{
+	txchan <- []byte{
 		0x31, 0x03, // unit id and response code
 		0x04,       // length
 		0x11, 0x22, // register #1
 		0x33, 0x44, // register #2
 		0x7b, 0xc5, // CRC
 	}
-	res, err	= rt.readRTUFrame()
+	res, err = rt.readRTUFrame()
 	if err != nil {
 		t.Errorf("readRTUFrame() should have succeeded, got %v", err)
 	}
@@ -135,7 +133,7 @@ func TestRTUTransportReadRTUFrame(t *testing.T) {
 	} {
 		if res.payload[i] != b {
 			t.Errorf("expected 0x%02x at position %v, got 0x%02x",
-				 b, i, res.payload[i])
+				b, i, res.payload[i])
 		}
 	}
 
@@ -146,8 +144,8 @@ func TestRTUTransportReadRTUFrame(t *testing.T) {
 }
 
 func feedTestPipe(t *testing.T, in chan []byte, out io.WriteCloser) {
-	var err		error
-	var txbuf	[]byte
+	var err error
+	var txbuf []byte
 
 	for {
 		// grab a slice of bytes from the channel
@@ -169,19 +167,19 @@ func TestModbusRTUSerialCharTime(t *testing.T) {
 
 	d = serialCharTime(38400)
 	// expect 11 bits at 38400bps: 11 * (1/38400) = 286.458uS
-	if d != time.Duration(286458) * time.Nanosecond {
+	if d != time.Duration(286458)*time.Nanosecond {
 		t.Errorf("unexpected serial char duration: %v", d)
 	}
 
 	d = serialCharTime(19200)
 	// expect 11 bits at 19200bps: 11 * (1/19200) = 572.916uS
-	if d != time.Duration(572916) * time.Nanosecond {
+	if d != time.Duration(572916)*time.Nanosecond {
 		t.Errorf("unexpected serial char duration: %v", d)
 	}
 
 	d = serialCharTime(9600)
 	// expect 11 bits at 9600bps: 11 * (1/9600) = 1.145833ms
-	if d != time.Duration(1145833) * time.Nanosecond {
+	if d != time.Duration(1145833)*time.Nanosecond {
 		t.Errorf("unexpected serial char duration: %v", d)
 	}
 

@@ -5,8 +5,8 @@ import (
 )
 
 func TestCRC(t *testing.T) {
-	var c	crc
-	var out	[]byte
+	var c crc
+	var out []byte
 
 	// initialize the CRC object and make sure we get 0xffff as init value
 	c.init()
@@ -68,8 +68,8 @@ func TestCRC(t *testing.T) {
 }
 
 func TestCRCIsEqual(t *testing.T) {
-	var c	crc
-	var out	[]byte
+	var c crc
+	var out []byte
 
 	// initialize the CRC object and feed it a few bytes
 	c.init()

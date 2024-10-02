@@ -1,8 +1,8 @@
 package main
 
 import (
-	"crypto/x509"
 	"crypto/tls"
+	"crypto/x509"
 	"fmt"
 	"os"
 	"sync"
@@ -89,12 +89,12 @@ import (
  */
 
 func main() {
-	var err            error
-	var eh             *exampleHandler
-	var server         *modbus.ModbusServer
-	var serverKeyPair  tls.Certificate
+	var err error
+	var eh *exampleHandler
+	var server *modbus.ModbusServer
+	var serverKeyPair tls.Certificate
 	var clientCertPool *x509.CertPool
-	var ticker         *time.Ticker
+	var ticker *time.Ticker
 
 	// create the handler object
 	eh = &exampleHandler{}
@@ -123,15 +123,15 @@ func main() {
 	// create the server object
 	server, err = modbus.NewServer(&modbus.ServerConfiguration{
 		// listen on localhost port 5802
-		URL:           "tcp+tls://localhost:5802",
+		URL: "tcp+tls://localhost:5802",
 		// accept 10 concurrent connections max.
-		MaxClients:    10,
+		MaxClients: 10,
 		// close idle connections after 1min of inactivity
-		Timeout:       60 * time.Second,
+		Timeout: 60 * time.Second,
 		// use serverKeyPair as server certificate + server private key
 		TLSServerCert: &serverKeyPair,
 		// use the client cert/CA pool to verify client certificates
-		TLSClientCAs:  clientCertPool,
+		TLSClientCAs: clientCertPool,
 	}, eh)
 	if err != nil {
 		fmt.Printf("failed to create server: %v\n", err)
@@ -147,7 +147,7 @@ func main() {
 	}
 	fmt.Println("server started")
 
-	ticker	= time.NewTicker(1 * time.Second)
+	ticker = time.NewTicker(1 * time.Second)
 	for {
 		<-ticker.C
 
@@ -169,7 +169,7 @@ type exampleHandler struct {
 	// this lock is used to avoid concurrency issues between goroutines, as
 	// handler methods are called from different goroutines
 	// (1 goroutine per client)
-	lock  sync.RWMutex
+	lock sync.RWMutex
 
 	// unix timestamp register, incremented in the main() function above and exposed
 	// as a 32-bit holding register (2 consecutive 16-bit modbus registers).
@@ -180,7 +180,7 @@ type exampleHandler struct {
 // This method gets called whenever a valid modbus request asking for a holding register
 // operation is received by the server.
 func (eh *exampleHandler) HandleHoldingRegisters(req *modbus.HoldingRegistersRequest) (res []uint16, err error) {
-	var regAddr	uint16
+	var regAddr uint16
 
 	// require the "operator" role for write operations (i.e. set the clock).
 	if req.IsWrite && req.ClientRole != "operator" {
@@ -199,26 +199,26 @@ func (eh *exampleHandler) HandleHoldingRegisters(req *modbus.HoldingRegistersReq
 	// loop through `quantity` registers
 	for i := 0; i < int(req.Quantity); i++ {
 		// compute the target register address
-		regAddr	= req.Addr + uint16(i)
+		regAddr = req.Addr + uint16(i)
 
 		switch regAddr {
 		// expose the 16 most-significant bits of the clock in register #0
 		case 0:
 			if req.IsWrite {
 				eh.clock =
-					((uint32(req.Args[i]) << 16) & 0xffff0000 |
-					 (eh.clock & 0x0000ffff))
+					((uint32(req.Args[i])<<16)&0xffff0000 |
+						(eh.clock & 0x0000ffff))
 			}
-			res = append(res, uint16((eh.clock >> 16) & 0x0000ffff))
+			res = append(res, uint16((eh.clock>>16)&0x0000ffff))
 
 		// expose the 16 least-significant bits of the clock in register #1
 		case 1:
 			if req.IsWrite {
 				eh.clock =
-					(uint32(req.Args[i]) & 0x0000ffff |
-					 (eh.clock & 0xffff0000))
+					(uint32(req.Args[i])&0x0000ffff |
+						(eh.clock & 0xffff0000))
 			}
-			res = append(res, uint16(eh.clock & 0x0000ffff))
+			res = append(res, uint16(eh.clock&0x0000ffff))
 
 		// any other address is unknown
 		default:

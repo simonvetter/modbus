@@ -18,11 +18,11 @@ import (
  */
 
 func main() {
-	var client         *modbus.ModbusClient
-	var err            error
-	var clientKeyPair  tls.Certificate
+	var client *modbus.ModbusClient
+	var err error
+	var clientKeyPair tls.Certificate
 	var serverCertPool *x509.CertPool
-	var regs           []uint16
+	var regs []uint16
 
 	// load the client certificate and its associated private key, which
 	// are used to authenticate the client to the server
@@ -47,11 +47,11 @@ func main() {
 		// tcp+tls is the moniker for MBAPS (modbus/tcp encapsulated in
 		// TLS),
 		// 802/tcp is the IANA-registered port for MBAPS.
-		URL:           "tcp+tls://secure-plc:802",
+		URL: "tcp+tls://secure-plc:802",
 		// set the client-side cert and key
 		TLSClientCert: &clientKeyPair,
 		// set the server/CA certificate
-		TLSRootCAs:    serverCertPool,
+		TLSRootCAs: serverCertPool,
 	})
 	if err != nil {
 		fmt.Printf("failed to create modbus client: %v\n", err)

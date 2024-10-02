@@ -1,6 +1,6 @@
 package modbus
 
-import	(
+import (
 	"time"
 
 	"github.com/goburrow/serial"
@@ -10,43 +10,46 @@ import	(
 // 1) satisfy the rtuLink interface and
 // 2) add Read() deadline/timeout support.
 type serialPortWrapper struct {
-	conf		*serialPortConfig
-	port		serial.Port
-	deadline	time.Time
+	conf     *serialPortConfig
+	port     serial.Port
+	deadline time.Time
 }
 
 type serialPortConfig struct {
-	Device		string
-	Speed		uint
-	DataBits	uint
-	Parity		uint
-	StopBits	uint
+	Device   string
+	Speed    uint
+	DataBits uint
+	Parity   uint
+	StopBits uint
 }
 
 func newSerialPortWrapper(conf *serialPortConfig) (spw *serialPortWrapper) {
 	spw = &serialPortWrapper{
-		conf:	conf,
+		conf: conf,
 	}
 
 	return
 }
 
 func (spw *serialPortWrapper) Open() (err error) {
-	var parity	string
+	var parity string
 
 	switch spw.conf.Parity {
-	case PARITY_NONE:	parity	= "N"
-	case PARITY_EVEN:	parity	= "E"
-	case PARITY_ODD:	parity	= "O"
+	case PARITY_NONE:
+		parity = "N"
+	case PARITY_EVEN:
+		parity = "E"
+	case PARITY_ODD:
+		parity = "O"
 	}
 
 	spw.port, err = serial.Open(&serial.Config{
-		Address:	spw.conf.Device,
-		BaudRate:	int(spw.conf.Speed),
-		DataBits:	int(spw.conf.DataBits),
-		Parity:		parity,
-		StopBits:	int(spw.conf.StopBits),
-		Timeout:	10 * time.Millisecond,
+		Address:  spw.conf.Device,
+		BaudRate: int(spw.conf.Speed),
+		DataBits: int(spw.conf.DataBits),
+		Parity:   parity,
+		StopBits: int(spw.conf.StopBits),
+		Timeout:  10 * time.Millisecond,
 	})
 
 	return
@@ -64,11 +67,12 @@ func (spw *serialPortWrapper) Close() (err error) {
 // attempting to read from the serial port.
 // If Read() is called before the deadline, a read attempt to the serial port
 // is made. At this point, one of two things can happen:
-// - the serial port's receive buffer has one or more bytes and port.Read()
-//   returns immediately (partial or full read),
-// - the serial port's receive buffer is empty: port.Read() blocks for
-//   up to 10ms and returns serial.ErrTimeout. The serial timeout error is
-//   masked and Read() returns with no data.
+//   - the serial port's receive buffer has one or more bytes and port.Read()
+//     returns immediately (partial or full read),
+//   - the serial port's receive buffer is empty: port.Read() blocks for
+//     up to 10ms and returns serial.ErrTimeout. The serial timeout error is
+//     masked and Read() returns with no data.
+//
 // As the higher-level methods use io.ReadFull(), Read() will be called
 // as many times as necessary until either enough bytes have been read or an
 // error is returned (ErrRequestTimedOut or any other i/o error).

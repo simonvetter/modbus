@@ -4,37 +4,37 @@ import (
 	"crypto/tls"
 	"encoding/hex"
 	"errors"
-	"fmt"
 	"flag"
+	"fmt"
 	"os"
-	"strings"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/simonvetter/modbus"
 )
 
 func main() {
-	var err	          error
-	var help          bool
-	var client        *modbus.ModbusClient
-	var config        *modbus.ClientConfiguration
-	var target        string
-	var caPath        string          // path to TLS CA/server certificate
-	var certPath      string          // path to TLS client certificate
-	var keyPath       string          // path to TLS client key
+	var err error
+	var help bool
+	var client *modbus.ModbusClient
+	var config *modbus.ClientConfiguration
+	var target string
+	var caPath string   // path to TLS CA/server certificate
+	var certPath string // path to TLS client certificate
+	var keyPath string  // path to TLS client key
 	var clientKeyPair tls.Certificate
-	var speed         uint
-	var dataBits      uint
-	var parity        string
-	var stopBits      uint
-	var endianness    string
-	var wordOrder     string
-	var timeout       string
-	var cEndianess    modbus.Endianness
-	var cWordOrder    modbus.WordOrder
-	var unitId        uint
-	var runList       []operation
+	var speed uint
+	var dataBits uint
+	var parity string
+	var stopBits uint
+	var endianness string
+	var wordOrder string
+	var timeout string
+	var cEndianess modbus.Endianness
+	var cWordOrder modbus.WordOrder
+	var unitId uint
+	var runList []operation
 
 	flag.StringVar(&target, "target", "", "target device to connect to (e.g. tcp://somehost:502) [required]")
 	flag.UintVar(&speed, "speed", 19200, "serial bus speed in bps (rtu)")
@@ -62,20 +62,23 @@ func main() {
 	}
 
 	// create and populate the client configuration object
-	config		= &modbus.ClientConfiguration{
-		URL:		target,
-		Speed:		speed,
-		DataBits:	dataBits,
-		StopBits:	stopBits,
+	config = &modbus.ClientConfiguration{
+		URL:      target,
+		Speed:    speed,
+		DataBits: dataBits,
+		StopBits: stopBits,
 	}
 
 	switch parity {
-	case "none":	config.Parity	= modbus.PARITY_NONE
-	case "odd":	config.Parity	= modbus.PARITY_ODD
-	case "even":	config.Parity	= modbus.PARITY_EVEN
+	case "none":
+		config.Parity = modbus.PARITY_NONE
+	case "odd":
+		config.Parity = modbus.PARITY_ODD
+	case "even":
+		config.Parity = modbus.PARITY_EVEN
 	default:
 		fmt.Printf("unknown parity setting '%s' (should be one of none, odd or even)\n",
-	                   parity)
+			parity)
 		os.Exit(1)
 	}
 
@@ -87,20 +90,24 @@ func main() {
 
 	// parse encoding (endianness and word order) settings
 	switch endianness {
-	case "big":	cEndianess	= modbus.BIG_ENDIAN
-	case "little":  cEndianess	= modbus.LITTLE_ENDIAN
+	case "big":
+		cEndianess = modbus.BIG_ENDIAN
+	case "little":
+		cEndianess = modbus.LITTLE_ENDIAN
 	default:
 		fmt.Printf("unknown endianness setting '%s' (should either be big or little)\n",
-			   endianness)
+			endianness)
 		os.Exit(1)
 	}
 
 	switch wordOrder {
-	case "highfirst", "hf": cWordOrder	= modbus.HIGH_WORD_FIRST
-	case "lowfirst", "lf":  cWordOrder	= modbus.LOW_WORD_FIRST
+	case "highfirst", "hf":
+		cWordOrder = modbus.HIGH_WORD_FIRST
+	case "lowfirst", "lf":
+		cWordOrder = modbus.LOW_WORD_FIRST
 	default:
 		fmt.Printf("unknown word order setting '%s' (should be one of highfirst, hf, littlefirst, lf)\n",
-			   wordOrder)
+			wordOrder)
 		os.Exit(1)
 	}
 
@@ -142,10 +149,10 @@ func main() {
 
 	// parse arguments and build a list of objects
 	for _, arg := range flag.Args() {
-		var splitArgs	[]string
-		var o		operation
+		var splitArgs []string
+		var o operation
 
-		splitArgs	= strings.Split(arg, ":")
+		splitArgs = strings.Split(arg, ":")
 		if len(splitArgs) < 2 && splitArgs[0] != "repeat" && splitArgs[0] != "date" {
 			fmt.Printf("illegal command format (should be command:arg1:arg2..., e.g. rh:uint32:0x1000+5)\n")
 			os.Exit(2)
@@ -153,57 +160,66 @@ func main() {
 
 		switch splitArgs[0] {
 		case "rc", "readCoil", "readCoils",
-		     "rdi", "readDiscreteInput", "readDiscreteInputs":
+			"rdi", "readDiscreteInput", "readDiscreteInputs":
 
 			if len(splitArgs) != 2 {
 				fmt.Printf("need exactly 1 argument after rc/rdi, got %v\n",
-					   len(splitArgs) - 1)
+					len(splitArgs)-1)
 				os.Exit(2)
 			}
 
 			if splitArgs[0] == "rc" || splitArgs[0] == "readCoil" || splitArgs[0] == "readCoils" {
-				o.isCoil	= true
+				o.isCoil = true
 			}
 
-			o.op			= readBools
-			o.addr, o.quantity, err	= parseAddressAndQuantity(splitArgs[1])
+			o.op = readBools
+			o.addr, o.quantity, err = parseAddressAndQuantity(splitArgs[1])
 			if err != nil {
 				fmt.Printf("failed to parse address ('%v'): %v\n", splitArgs[1], err)
 				os.Exit(2)
 			}
 
 		case "rh", "readHoldingRegister", "readHoldingRegisters",
-		     "ri", "readInputRegister", "readInputRegisters":
+			"ri", "readInputRegister", "readInputRegisters":
 
 			if len(splitArgs) != 3 {
 				fmt.Printf("need exactly 2 arguments after rh/ri, got %v\n",
-					   len(splitArgs) - 1)
+					len(splitArgs)-1)
 				os.Exit(2)
 			}
 
 			if splitArgs[0] == "rh" || splitArgs[0] == "readHoldingRegister" ||
-			   splitArgs[0] == "readHoldingRegisters" {
-				   o.isHoldingReg	= true
+				splitArgs[0] == "readHoldingRegisters" {
+				o.isHoldingReg = true
 			}
 
 			switch splitArgs[1] {
-			case "uint16":  o.op = readUint16
-			case "int16":   o.op = readInt16
-			case "uint32":  o.op = readUint32
-			case "int32":   o.op = readInt32
-			case "float32": o.op = readFloat32
-			case "uint64":  o.op = readUint64
-			case "int64":   o.op = readInt64
-			case "float64": o.op = readFloat64
-			case "bytes":   o.op = readBytes
+			case "uint16":
+				o.op = readUint16
+			case "int16":
+				o.op = readInt16
+			case "uint32":
+				o.op = readUint32
+			case "int32":
+				o.op = readInt32
+			case "float32":
+				o.op = readFloat32
+			case "uint64":
+				o.op = readUint64
+			case "int64":
+				o.op = readInt64
+			case "float64":
+				o.op = readFloat64
+			case "bytes":
+				o.op = readBytes
 			default:
-				fmt.Printf("unknown register type '%v' (should be one of " +
-					   "[u]unt16, [u]int32, [u]int64, float32, float64, bytes)\n",
-					   splitArgs[1])
+				fmt.Printf("unknown register type '%v' (should be one of "+
+					"[u]unt16, [u]int32, [u]int64, float32, float64, bytes)\n",
+					splitArgs[1])
 				os.Exit(2)
 			}
 
-			o.addr, o.quantity, err	= parseAddressAndQuantity(splitArgs[2])
+			o.addr, o.quantity, err = parseAddressAndQuantity(splitArgs[2])
 			if err != nil {
 				fmt.Printf("failed to parse address ('%v'): %v\n", splitArgs[2], err)
 				os.Exit(2)
@@ -212,34 +228,36 @@ func main() {
 		case "wc", "writeCoil":
 			if len(splitArgs) != 3 {
 				fmt.Printf("need exactly 2 arguments after writeCoil, got %v\n",
-					   len(splitArgs) - 1)
+					len(splitArgs)-1)
 				os.Exit(2)
 			}
 
-			o.op			= writeCoil
-			o.addr, err		= parseUint16(splitArgs[1])
+			o.op = writeCoil
+			o.addr, err = parseUint16(splitArgs[1])
 			if err != nil {
 				fmt.Printf("failed to parse address ('%v'): %v\n", splitArgs[1], err)
 				os.Exit(2)
 			}
 
 			switch splitArgs[2] {
-			case "true":	o.coil	= true
-			case "false":	o.coil	= false
+			case "true":
+				o.coil = true
+			case "false":
+				o.coil = false
 			default:
 				fmt.Printf("failed to parse coil value '%v' (should either be true or false)\n",
-					   splitArgs[2])
+					splitArgs[2])
 				os.Exit(2)
 			}
 
 		case "wr", "writeRegister":
 			if len(splitArgs) != 4 {
 				fmt.Printf("need exactly 3 arguments after writeRegister, got %v\n",
-					   len(splitArgs) - 1)
+					len(splitArgs)-1)
 				os.Exit(2)
 			}
 
-			o.addr, err	= parseUint16(splitArgs[2])
+			o.addr, err = parseUint16(splitArgs[2])
 			if err != nil {
 				fmt.Printf("failed to parse address ('%v'): %v\n", splitArgs[2], err)
 				os.Exit(2)
@@ -247,50 +265,50 @@ func main() {
 
 			switch splitArgs[1] {
 			case "uint16":
-				o.op         = writeUint16
-				o.u16, err   = parseUint16(splitArgs[3])
+				o.op = writeUint16
+				o.u16, err = parseUint16(splitArgs[3])
 
 			case "int16":
-				o.op         = writeInt16
-				o.u16, err   = parseInt16(splitArgs[3])
+				o.op = writeInt16
+				o.u16, err = parseInt16(splitArgs[3])
 
 			case "uint32":
-				o.op         = writeUint32
-				o.u32, err   = parseUint32(splitArgs[3])
+				o.op = writeUint32
+				o.u32, err = parseUint32(splitArgs[3])
 
 			case "int32":
-				o.op         = writeInt32
-				o.u32, err   = parseInt32(splitArgs[3])
+				o.op = writeInt32
+				o.u32, err = parseInt32(splitArgs[3])
 
 			case "float32":
-				o.op         = writeFloat32
-				o.f32, err   = parseFloat32(splitArgs[3])
+				o.op = writeFloat32
+				o.f32, err = parseFloat32(splitArgs[3])
 
 			case "uint64":
-				o.op         = writeUint64
-				o.u64, err   = parseUint64(splitArgs[3])
+				o.op = writeUint64
+				o.u64, err = parseUint64(splitArgs[3])
 
 			case "int64":
-				o.op         = writeInt64
-				o.u64, err   = parseInt64(splitArgs[3])
+				o.op = writeInt64
+				o.u64, err = parseInt64(splitArgs[3])
 
 			case "float64":
-				o.op         = writeFloat64
-				o.f64, err   = parseFloat64(splitArgs[3])
+				o.op = writeFloat64
+				o.f64, err = parseFloat64(splitArgs[3])
 
 			case "bytes":
-				o.op         = writeBytes
+				o.op = writeBytes
 				o.bytes, err = parseHexBytes(splitArgs[3])
 
 			case "string":
-				o.op         = writeBytes
-				o.bytes      = []byte(splitArgs[3])
-				err          = nil
+				o.op = writeBytes
+				o.bytes = []byte(splitArgs[3])
+				err = nil
 
 			default:
-				fmt.Printf("unknown register type '%v' (should be one of " +
-					   "[u]unt16, [u]int32, [u]int64, float32, float64, bytes, string)\n",
-					   splitArgs[1])
+				fmt.Printf("unknown register type '%v' (should be one of "+
+					"[u]unt16, [u]int32, [u]int64, float32, float64, bytes, string)\n",
+					splitArgs[1])
 				os.Exit(2)
 			}
 
@@ -302,12 +320,12 @@ func main() {
 		case "sleep":
 			if len(splitArgs) != 2 {
 				fmt.Printf("need exactly 1 argument after sleep, got %v\n",
-					   len(splitArgs) - 1)
+					len(splitArgs)-1)
 				os.Exit(2)
 			}
 
-			o.op		= sleep
-			o.duration, err	= time.ParseDuration(splitArgs[1])
+			o.op = sleep
+			o.duration, err = time.ParseDuration(splitArgs[1])
 			if err != nil {
 				fmt.Printf("failed to parse '%s' as duration: %v\n", splitArgs[1], err)
 				os.Exit(2)
@@ -316,12 +334,12 @@ func main() {
 		case "suid", "setUnitId", "sid":
 			if len(splitArgs) != 2 {
 				fmt.Printf("need exactly 1 argument after setUnitId, got %v\n",
-					   len(splitArgs) - 1)
+					len(splitArgs)-1)
 				os.Exit(2)
 			}
 
-			o.op		= setUnitId
-			o.unitId, err	= parseUnitId(splitArgs[1])
+			o.op = setUnitId
+			o.unitId, err = parseUnitId(splitArgs[1])
 			if err != nil {
 				fmt.Printf("failed to parse '%s' as unit id: %v\n", splitArgs[1], err)
 				os.Exit(2)
@@ -330,55 +348,55 @@ func main() {
 		case "repeat":
 			if len(splitArgs) != 1 {
 				fmt.Printf("repeat takes no arguments, got %v\n",
-					   len(splitArgs) - 1)
+					len(splitArgs)-1)
 				os.Exit(2)
 			}
 
-			o.op		= repeat
+			o.op = repeat
 
 		case "date":
 			if len(splitArgs) != 1 {
 				fmt.Printf("date takes no arguments, got %v\n",
-					   len(splitArgs) - 1)
-			os.Exit(2)
-		   }
+					len(splitArgs)-1)
+				os.Exit(2)
+			}
 
-		   o.op        = date
+			o.op = date
 
 		case "scan":
 			if len(splitArgs) != 2 {
 				fmt.Printf("need exactly 1 argument after scan, got %v\n",
-					   len(splitArgs) - 1)
+					len(splitArgs)-1)
 				os.Exit(2)
 			}
 
 			switch splitArgs[1] {
 			case "c", "coils":
-				o.op		= scanBools
-				o.isCoil	= true
+				o.op = scanBools
+				o.isCoil = true
 			case "di", "discreteInputs":
-				o.op		= scanBools
-				o.isCoil	= false
+				o.op = scanBools
+				o.isCoil = false
 			case "h", "hr", "holding", "holdingRegisters":
-				o.op		= scanRegisters
-				o.isHoldingReg	= true
+				o.op = scanRegisters
+				o.isHoldingReg = true
 			case "i", "ir", "input", "inputRegisters":
-				o.op		= scanRegisters
-				o.isHoldingReg	= false
+				o.op = scanRegisters
+				o.isHoldingReg = false
 			default:
 				fmt.Printf("unknown register type '%v' (valid options <coils|di|hr|ir>\n",
-					   splitArgs[1])
+					splitArgs[1])
 				os.Exit(2)
 			}
 
 		case "ping":
 			if len(splitArgs) < 2 || len(splitArgs) > 3 {
 				fmt.Printf("need 1 or 2 arguments after ping, got %v\n",
-					   len(splitArgs) - 1)
+					len(splitArgs)-1)
 				os.Exit(2)
 			}
 
-			o.op            = ping
+			o.op = ping
 			o.quantity, err = parseUint16(splitArgs[1])
 			if err != nil {
 				fmt.Printf("failed to parse ping count ('%v'): %v\n", splitArgs[1], err)
@@ -391,7 +409,7 @@ func main() {
 			}
 
 			if len(splitArgs) == 3 {
-				o.duration, err	= time.ParseDuration(splitArgs[2])
+				o.duration, err = time.ParseDuration(splitArgs[2])
 				if err != nil {
 					fmt.Printf("failed to parse '%s' as duration: %v\n", splitArgs[2], err)
 					os.Exit(2)
@@ -403,12 +421,12 @@ func main() {
 			os.Exit(2)
 		}
 
-		runList	= append(runList, o)
+		runList = append(runList, o)
 
 	}
 
 	// create the modbus client
-	client, err	= modbus.NewClient(config)
+	client, err = modbus.NewClient(config)
 	if err != nil {
 		fmt.Printf("failed to create client: %v\n", err)
 		os.Exit(1)
@@ -429,7 +447,7 @@ func main() {
 	client.SetUnitId(uint8(unitId))
 
 	// connect to the remote host/open the serial port
-	err		= client.Open()
+	err = client.Open()
 	if err != nil {
 		fmt.Printf("failed to open client: %v\n", err)
 		os.Exit(2)
@@ -440,30 +458,30 @@ func main() {
 
 		switch o.op {
 		case readBools:
-			var res	[]bool
+			var res []bool
 
 			if o.isCoil {
-				res, err = client.ReadCoils(o.addr, o.quantity + 1)
+				res, err = client.ReadCoils(o.addr, o.quantity+1)
 			} else {
-				res, err = client.ReadDiscreteInputs(o.addr, o.quantity + 1)
+				res, err = client.ReadDiscreteInputs(o.addr, o.quantity+1)
 			}
 			if err != nil {
 				fmt.Printf("failed to read coils/discrete inputs: %v\n", err)
 			} else {
 				for idx := range res {
-					fmt.Printf("0x%04x\t%-5v : %v\n", o.addr + uint16(idx),
-									   o.addr + uint16(idx),
-								           res[idx])
+					fmt.Printf("0x%04x\t%-5v : %v\n", o.addr+uint16(idx),
+						o.addr+uint16(idx),
+						res[idx])
 				}
 			}
 
 		case readUint16, readInt16:
-			var res	[]uint16
+			var res []uint16
 
 			if o.isHoldingReg {
-				res, err = client.ReadRegisters(o.addr, o.quantity + 1, modbus.HOLDING_REGISTER)
+				res, err = client.ReadRegisters(o.addr, o.quantity+1, modbus.HOLDING_REGISTER)
 			} else {
-				res, err = client.ReadRegisters(o.addr, o.quantity + 1, modbus.INPUT_REGISTER)
+				res, err = client.ReadRegisters(o.addr, o.quantity+1, modbus.INPUT_REGISTER)
 			}
 			if err != nil {
 				fmt.Printf("failed to read holding/input registers: %v\n", err)
@@ -471,25 +489,25 @@ func main() {
 				for idx := range res {
 					if o.op == readUint16 {
 						fmt.Printf("0x%04x\t%-5v : 0x%04x\t%v\n",
-							   o.addr + uint16(idx),
-							   o.addr + uint16(idx),
-							   res[idx], res[idx])
+							o.addr+uint16(idx),
+							o.addr+uint16(idx),
+							res[idx], res[idx])
 					} else {
 						fmt.Printf("0x%04x\t%-5v : 0x%04x\t%v\n",
-							   o.addr + uint16(idx),
-							   o.addr + uint16(idx),
-							   res[idx], int16(res[idx]))
+							o.addr+uint16(idx),
+							o.addr+uint16(idx),
+							res[idx], int16(res[idx]))
 					}
 				}
 			}
 
 		case readUint32, readInt32:
-			var res	[]uint32
+			var res []uint32
 
 			if o.isHoldingReg {
-				res, err = client.ReadUint32s(o.addr, o.quantity + 1, modbus.HOLDING_REGISTER)
+				res, err = client.ReadUint32s(o.addr, o.quantity+1, modbus.HOLDING_REGISTER)
 			} else {
-				res, err = client.ReadUint32s(o.addr, o.quantity + 1, modbus.INPUT_REGISTER)
+				res, err = client.ReadUint32s(o.addr, o.quantity+1, modbus.INPUT_REGISTER)
 			}
 			if err != nil {
 				fmt.Printf("failed to read holding/input registers: %v\n", err)
@@ -497,44 +515,44 @@ func main() {
 				for idx := range res {
 					if o.op == readUint32 {
 						fmt.Printf("0x%04x\t%-5v : 0x%08x\t%v\n",
-							   o.addr + (uint16(idx) * 2),
-							   o.addr + (uint16(idx) * 2),
-							   res[idx], res[idx])
+							o.addr+(uint16(idx)*2),
+							o.addr+(uint16(idx)*2),
+							res[idx], res[idx])
 					} else {
 						fmt.Printf("0x%04x\t%-5v : 0x%08x\t%v\n",
-							   o.addr + (uint16(idx) * 2),
-							   o.addr + (uint16(idx) * 2),
-							   res[idx], int32(res[idx]))
+							o.addr+(uint16(idx)*2),
+							o.addr+(uint16(idx)*2),
+							res[idx], int32(res[idx]))
 					}
 				}
 			}
 
 		case readFloat32:
-			var res	[]float32
+			var res []float32
 
 			if o.isHoldingReg {
-				res, err = client.ReadFloat32s(o.addr, o.quantity + 1, modbus.HOLDING_REGISTER)
+				res, err = client.ReadFloat32s(o.addr, o.quantity+1, modbus.HOLDING_REGISTER)
 			} else {
-				res, err = client.ReadFloat32s(o.addr, o.quantity + 1, modbus.INPUT_REGISTER)
+				res, err = client.ReadFloat32s(o.addr, o.quantity+1, modbus.INPUT_REGISTER)
 			}
 			if err != nil {
 				fmt.Printf("failed to read holding/input registers: %v\n", err)
 			} else {
 				for idx := range res {
 					fmt.Printf("0x%04x\t%-5v : %f\n",
-						   o.addr + (uint16(idx) * 2),
-						   o.addr + (uint16(idx) * 2),
-						   res[idx])
+						o.addr+(uint16(idx)*2),
+						o.addr+(uint16(idx)*2),
+						res[idx])
 				}
 			}
 
 		case readUint64, readInt64:
-			var res	[]uint64
+			var res []uint64
 
 			if o.isHoldingReg {
-				res, err = client.ReadUint64s(o.addr, o.quantity + 1, modbus.HOLDING_REGISTER)
+				res, err = client.ReadUint64s(o.addr, o.quantity+1, modbus.HOLDING_REGISTER)
 			} else {
-				res, err = client.ReadUint64s(o.addr, o.quantity + 1, modbus.INPUT_REGISTER)
+				res, err = client.ReadUint64s(o.addr, o.quantity+1, modbus.INPUT_REGISTER)
 			}
 			if err != nil {
 				fmt.Printf("failed to read holding/input registers: %v\n", err)
@@ -542,44 +560,44 @@ func main() {
 				for idx := range res {
 					if o.op == readUint64 {
 						fmt.Printf("0x%04x\t%-5v : 0x%016x\t%v\n",
-							   o.addr + (uint16(idx) * 4),
-							   o.addr + (uint16(idx) * 4),
-							   res[idx], res[idx])
+							o.addr+(uint16(idx)*4),
+							o.addr+(uint16(idx)*4),
+							res[idx], res[idx])
 					} else {
 						fmt.Printf("0x%04x\t%-5v : 0x%016x\t%v\n",
-							   o.addr + (uint16(idx) * 4),
-							   o.addr + (uint16(idx) * 4),
-							   res[idx], int64(res[idx]))
+							o.addr+(uint16(idx)*4),
+							o.addr+(uint16(idx)*4),
+							res[idx], int64(res[idx]))
 					}
 				}
 			}
 
 		case readFloat64:
-			var res	[]float64
+			var res []float64
 
 			if o.isHoldingReg {
-				res, err = client.ReadFloat64s(o.addr, o.quantity + 1, modbus.HOLDING_REGISTER)
+				res, err = client.ReadFloat64s(o.addr, o.quantity+1, modbus.HOLDING_REGISTER)
 			} else {
-				res, err = client.ReadFloat64s(o.addr, o.quantity + 1, modbus.INPUT_REGISTER)
+				res, err = client.ReadFloat64s(o.addr, o.quantity+1, modbus.INPUT_REGISTER)
 			}
 			if err != nil {
 				fmt.Printf("failed to read holding/input registers: %v\n", err)
 			} else {
 				for idx := range res {
 					fmt.Printf("0x%04x\t%-5v : %f\n",
-						   o.addr + (uint16(idx) * 4),
-						   o.addr + (uint16(idx) * 4),
-						   res[idx])
+						o.addr+(uint16(idx)*4),
+						o.addr+(uint16(idx)*4),
+						res[idx])
 				}
 			}
 
 		case readBytes:
-			var res	[]byte
+			var res []byte
 
 			if o.isHoldingReg {
-				res, err = client.ReadBytes(o.addr, o.quantity + 1, modbus.HOLDING_REGISTER)
+				res, err = client.ReadBytes(o.addr, o.quantity+1, modbus.HOLDING_REGISTER)
 			} else {
-				res, err = client.ReadBytes(o.addr, o.quantity + 1, modbus.INPUT_REGISTER)
+				res, err = client.ReadBytes(o.addr, o.quantity+1, modbus.INPUT_REGISTER)
 			}
 			if err != nil {
 				fmt.Printf("failed to read holding/input registers: %v\n", err)
@@ -587,11 +605,11 @@ func main() {
 				for idx := range res {
 					if (idx % 16) == 0 {
 						fmt.Printf("0x%04x\t%-5v : ",
-							o.addr + (uint16(idx/2)), o.addr + (uint16(idx/2)))
+							o.addr+(uint16(idx/2)), o.addr+(uint16(idx/2)))
 					}
 					fmt.Printf("%02x", res[idx])
 
-					if (idx % 16) == 15 || idx == len(res) - 1 {
+					if (idx%16) == 15 || idx == len(res)-1 {
 						fmt.Printf(" <%s>\n",
 							decodeString(res[(idx/16*16):(idx/16*16)+(idx%16)+1]))
 					} else if (idx % 16) == 7 {
@@ -601,93 +619,93 @@ func main() {
 			}
 
 		case writeCoil:
-			err	= client.WriteCoil(o.addr, o.coil)
+			err = client.WriteCoil(o.addr, o.coil)
 			if err != nil {
 				fmt.Printf("failed to write %v at coil address 0x%04x: %v\n",
-					   o.coil, o.addr, err)
+					o.coil, o.addr, err)
 			} else {
 				fmt.Printf("wrote %v at coil address 0x%04x\n",
-					   o.coil, o.addr)
+					o.coil, o.addr)
 			}
 
 		case writeUint16:
-			err	= client.WriteRegister(o.addr, o.u16)
+			err = client.WriteRegister(o.addr, o.u16)
 			if err != nil {
 				fmt.Printf("failed to write %v at register address 0x%04x: %v\n",
-					   o.u16, o.addr, err)
+					o.u16, o.addr, err)
 			} else {
 				fmt.Printf("wrote %v at register address 0x%04x\n",
-					   o.u16, o.addr)
+					o.u16, o.addr)
 			}
 
 		case writeInt16:
-			err	= client.WriteRegister(o.addr, o.u16)
+			err = client.WriteRegister(o.addr, o.u16)
 			if err != nil {
 				fmt.Printf("failed to write %v at register address 0x%04x: %v\n",
-					   int16(o.u16), o.addr, err)
+					int16(o.u16), o.addr, err)
 			} else {
 				fmt.Printf("wrote %v at register address 0x%04x\n",
-					   int16(o.u16), o.addr)
+					int16(o.u16), o.addr)
 			}
 
 		case writeUint32:
-			err	= client.WriteUint32(o.addr, o.u32)
+			err = client.WriteUint32(o.addr, o.u32)
 			if err != nil {
 				fmt.Printf("failed to write %v at address 0x%04x: %v\n",
-					   o.u32, o.addr, err)
+					o.u32, o.addr, err)
 			} else {
 				fmt.Printf("wrote %v at address 0x%04x\n",
-					   o.u32, o.addr)
+					o.u32, o.addr)
 			}
 
 		case writeInt32:
-			err	= client.WriteUint32(o.addr, o.u32)
+			err = client.WriteUint32(o.addr, o.u32)
 			if err != nil {
 				fmt.Printf("failed to write %v at address 0x%04x: %v\n",
-					   int32(o.u32), o.addr, err)
+					int32(o.u32), o.addr, err)
 			} else {
 				fmt.Printf("wrote %v at address 0x%04x\n",
-					   int32(o.u32), o.addr)
+					int32(o.u32), o.addr)
 			}
 
 		case writeFloat32:
-			err	= client.WriteFloat32(o.addr, o.f32)
+			err = client.WriteFloat32(o.addr, o.f32)
 			if err != nil {
 				fmt.Printf("failed to write %f at address 0x%04x: %v\n",
-					   o.f32, o.addr, err)
+					o.f32, o.addr, err)
 			} else {
 				fmt.Printf("wrote %f at address 0x%04x\n",
-					   o.f32, o.addr)
+					o.f32, o.addr)
 			}
 
 		case writeUint64:
-			err	= client.WriteUint64(o.addr, o.u64)
+			err = client.WriteUint64(o.addr, o.u64)
 			if err != nil {
 				fmt.Printf("failed to write %v at address 0x%04x: %v\n",
-					   o.u64, o.addr, err)
+					o.u64, o.addr, err)
 			} else {
 				fmt.Printf("wrote %v at address 0x%04x\n",
-					   o.u64, o.addr)
+					o.u64, o.addr)
 			}
 
 		case writeInt64:
-			err	= client.WriteUint64(o.addr, o.u64)
+			err = client.WriteUint64(o.addr, o.u64)
 			if err != nil {
 				fmt.Printf("failed to write %v at address 0x%04x: %v\n",
-					   int64(o.u64), o.addr, err)
+					int64(o.u64), o.addr, err)
 			} else {
 				fmt.Printf("wrote %v at address 0x%04x\n",
-					   int64(o.u64), o.addr)
+					int64(o.u64), o.addr)
 			}
 
 		case writeFloat64:
-			err	= client.WriteFloat64(o.addr, o.f64)
+			err = client.WriteFloat64(o.addr, o.f64)
 			if err != nil {
 				fmt.Printf("failed to write %f at address 0x%04x: %v\n",
-					   o.f64, o.addr, err)
+					o.f64, o.addr, err)
 			} else {
 				fmt.Printf("wrote %f at address 0x%04x\n",
-					   o.f64, o.addr)
+					o.f64, o.addr)
 			}
 
 		case writeBytes:
@@ -720,7 +738,7 @@ func main() {
 			performRegisterScan(client, o.isHoldingReg)
 
 		case ping:
-			performPing(client, o.quantity, o.duration);
+			performPing(client, o.quantity, o.duration)
 
 		default:
 			fmt.Printf("unknown operation %v\n", o)
@@ -732,7 +750,7 @@ func main() {
 }
 
 const (
-	readBools      uint = iota + 1
+	readBools uint = iota + 1
 	readUint16
 	readInt16
 	readUint32
@@ -784,7 +802,7 @@ func parseUint16(in string) (u16 uint16, err error) {
 
 	val, err = strconv.ParseUint(in, 0, 16)
 	if err == nil {
-		u16	= uint16(val)
+		u16 = uint16(val)
 		return
 	}
 
@@ -792,22 +810,22 @@ func parseUint16(in string) (u16 uint16, err error) {
 }
 
 func parseInt16(in string) (u16 uint16, err error) {
-	var val	int64
+	var val int64
 
 	val, err = strconv.ParseInt(in, 0, 16)
 	if err == nil {
-		u16	= uint16(int16(val))
+		u16 = uint16(int16(val))
 	}
 
 	return
 }
 
 func parseUint32(in string) (u32 uint32, err error) {
-	var val	uint64
+	var val uint64
 
 	val, err = strconv.ParseUint(in, 0, 32)
 	if err == nil {
-		u32	= uint32(val)
+		u32 = uint32(val)
 		return
 	}
 
@@ -815,11 +833,11 @@ func parseUint32(in string) (u32 uint32, err error) {
 }
 
 func parseInt32(in string) (u32 uint32, err error) {
-	var val	int64
+	var val int64
 
 	val, err = strconv.ParseInt(in, 0, 32)
 	if err == nil {
-		u32	= uint32(int32(val))
+		u32 = uint32(int32(val))
 	}
 
 	return
@@ -828,31 +846,31 @@ func parseInt32(in string) (u32 uint32, err error) {
 func parseFloat32(in string) (f32 float32, err error) {
 	var val float64
 
-	val, err	= strconv.ParseFloat(in, 32)
+	val, err = strconv.ParseFloat(in, 32)
 	if err == nil {
-		f32	= float32(val)
+		f32 = float32(val)
 	}
 
 	return
 }
 
 func parseUint64(in string) (u64 uint64, err error) {
-	var val	uint64
+	var val uint64
 
 	val, err = strconv.ParseUint(in, 0, 64)
 	if err == nil {
-		u64	= val
+		u64 = val
 	}
 
 	return
 }
 
 func parseInt64(in string) (u64 uint64, err error) {
-	var val	int64
+	var val int64
 
 	val, err = strconv.ParseInt(in, 0, 64)
 	if err == nil {
-		u64	= uint64(val)
+		u64 = uint64(val)
 	}
 
 	return
@@ -861,9 +879,9 @@ func parseInt64(in string) (u64 uint64, err error) {
 func parseFloat64(in string) (f64 float64, err error) {
 	var val float64
 
-	val, err	= strconv.ParseFloat(in, 64)
+	val, err = strconv.ParseFloat(in, 64)
 	if err == nil {
-		f64	= val
+		f64 = val
 	}
 
 	return
@@ -874,16 +892,16 @@ func parseAddressAndQuantity(in string) (addr uint16, quantity uint16, err error
 
 	switch {
 	case len(split) == 1:
-		addr, err	= parseUint16(in)
+		addr, err = parseUint16(in)
 
 	case len(split) == 2:
-		addr, err	= parseUint16(split[0])
+		addr, err = parseUint16(split[0])
 		if err != nil {
 			return
 		}
-		quantity, err	= parseUint16(split[1])
+		quantity, err = parseUint16(split[1])
 	default:
-		err		= errors.New("illegal format")
+		err = errors.New("illegal format")
 	}
 
 	return
@@ -892,7 +910,7 @@ func parseAddressAndQuantity(in string) (addr uint16, quantity uint16, err error
 func parseUnitId(in string) (addr uint8, err error) {
 	var val uint64
 
-	val, err	= strconv.ParseUint(in, 0, 8)
+	val, err = strconv.ParseUint(in, 0, 8)
 	if err == nil {
 		addr = uint8(val)
 	}
@@ -907,32 +925,32 @@ func parseHexBytes(in string) (out []byte, err error) {
 }
 
 func performBoolScan(client *modbus.ModbusClient, isCoil bool) {
-	var err		error
-	var addr	uint32
-	var val		bool
-	var count	uint
-	var regType	string
+	var err error
+	var addr uint32
+	var val bool
+	var count uint
+	var regType string
 
 	if isCoil {
-		regType	= "coil"
+		regType = "coil"
 	} else {
-		regType	= "discrete input"
+		regType = "discrete input"
 	}
 
 	fmt.Printf("starting %s scan\n", regType)
 
 	for addr = 0; addr <= 0xffff; addr++ {
 		if isCoil {
-			val, err	= client.ReadCoil(uint16(addr))
+			val, err = client.ReadCoil(uint16(addr))
 		} else {
-			val, err	= client.ReadDiscreteInput(uint16(addr))
+			val, err = client.ReadDiscreteInput(uint16(addr))
 		}
 		if err == modbus.ErrIllegalDataAddress || err == modbus.ErrIllegalFunction {
 			// the register does not exist
 			continue
 		} else if err != nil {
 			fmt.Printf("failed to read %s at address 0x%04x: %v\n",
-			           regType, addr, err)
+				regType, addr, err)
 		} else {
 			// we found a coil: display its address and value
 			fmt.Printf("0x%04x\t%-5v : %v\n", addr, addr, val)
@@ -946,36 +964,36 @@ func performBoolScan(client *modbus.ModbusClient, isCoil bool) {
 }
 
 func performRegisterScan(client *modbus.ModbusClient, isHoldingReg bool) {
-	var err		error
-	var addr	uint32
-	var val		uint16
-	var count	uint
-	var regType	string
+	var err error
+	var addr uint32
+	var val uint16
+	var count uint
+	var regType string
 
 	if isHoldingReg {
-		regType	= "holding register"
+		regType = "holding register"
 	} else {
-		regType	= "input register"
+		regType = "input register"
 	}
 
 	fmt.Printf("starting %s scan\n", regType)
 
 	for addr = 0; addr <= 0xffff; addr++ {
 		if isHoldingReg {
-			val, err	= client.ReadRegister(uint16(addr), modbus.HOLDING_REGISTER)
+			val, err = client.ReadRegister(uint16(addr), modbus.HOLDING_REGISTER)
 		} else {
-			val, err	= client.ReadRegister(uint16(addr), modbus.INPUT_REGISTER)
+			val, err = client.ReadRegister(uint16(addr), modbus.INPUT_REGISTER)
 		}
 		if err == modbus.ErrIllegalDataAddress || err == modbus.ErrIllegalFunction {
 			// the register does not exist
 			continue
 		} else if err != nil {
 			fmt.Printf("failed to read %s at address 0x%04x: %v\n",
-			           regType, addr, err)
+				regType, addr, err)
 		} else {
 			// we found a register: display its address and value
 			fmt.Printf("0x%04x\t%-5v : 0x%04x\t%v\n",
-				   addr, addr, val, val)
+				addr, addr, val, val)
 			count++
 		}
 	}
@@ -986,26 +1004,26 @@ func performRegisterScan(client *modbus.ModbusClient, isHoldingReg bool) {
 }
 
 func performPing(client *modbus.ModbusClient, count uint16, interval time.Duration) {
-	var err           error
-	var okCount       uint
-	var timeoutCount  uint
+	var err error
+	var okCount uint
+	var timeoutCount uint
 	var otherErrCount uint
-	var startTs       time.Time
-	var ts            time.Time
-	var rtt           time.Duration
-	var minRTT        time.Duration
-	var maxRTT        time.Duration
-	var avgRTT        time.Duration
+	var startTs time.Time
+	var ts time.Time
+	var rtt time.Duration
+	var minRTT time.Duration
+	var maxRTT time.Duration
+	var avgRTT time.Duration
 
 	fmt.Printf("ping: sending %v requests...\n", count)
 
 	startTs = time.Now()
 
 	for run := uint16(0); run < count; run++ {
-		ts     = time.Now()
+		ts = time.Now()
 		_, err = client.ReadRegister(0x0000, modbus.HOLDING_REGISTER)
 
-		rtt    = time.Since(ts)
+		rtt = time.Since(ts)
 		avgRTT += rtt
 
 		if run == 0 || rtt < minRTT {
@@ -1023,17 +1041,17 @@ func performPing(client *modbus.ModbusClient, count uint16, interval time.Durati
 		case nil, modbus.ErrIllegalDataAddress, modbus.ErrIllegalFunction:
 			okCount++
 			fmt.Printf("ok: seq = %v, time: %v\n",
-				run + 1, rtt.Round(time.Microsecond))
+				run+1, rtt.Round(time.Microsecond))
 
 		case modbus.ErrRequestTimedOut, modbus.ErrGWTargetFailedToRespond:
 			timeoutCount++
 			fmt.Printf("timeout (%v): seq = %v, time: %v\n",
-				err, run + 1, rtt.Round(time.Microsecond))
+				err, run+1, rtt.Round(time.Microsecond))
 
 		default:
 			otherErrCount++
 			fmt.Printf("error (%v): seq = %v, time: %v\n",
-				err, run + 1, rtt.Round(time.Microsecond))
+				err, run+1, rtt.Round(time.Microsecond))
 		}
 
 		if interval > 0 {
@@ -1041,7 +1059,7 @@ func performPing(client *modbus.ModbusClient, count uint16, interval time.Durati
 		}
 	}
 
-	fmt.Printf("--- ping statistics ---\n" +
+	fmt.Printf("--- ping statistics ---\n"+
 		"%v queries, %v target replies, %v transmission errors, %v timeouts, time: %v\n",
 		count, okCount, otherErrCount, timeoutCount,
 		time.Since(startTs).Round(time.Millisecond))
@@ -1056,7 +1074,7 @@ func performPing(client *modbus.ModbusClient, count uint16, interval time.Durati
 
 func decodeString(in []byte) (out string) {
 	var dec []byte
-	var b   byte
+	var b byte
 
 	for idx := range in {
 		if in[idx] >= 0x20 && in[idx] <= 0x7e {
@@ -1077,13 +1095,13 @@ func displayHelp() {
 	flag.CommandLine.SetOutput(os.Stdout)
 
 	fmt.Println(
-`This tool is a modbus command line interface client meant to allow quick and easy
+		`This tool is a modbus command line interface client meant to allow quick and easy
 interaction with modbus devices (e.g. for probing or troubleshooting).
 
 Available options:`)
 	flag.PrintDefaults()
 	fmt.Printf(
-`
+		`
 
 Commands must be given as trailing arguments after any options.
 

@@ -2,8 +2,8 @@ package modbus
 
 import (
 	"fmt"
-	"os"
 	"log"
+	"os"
 )
 
 type logger struct {
@@ -13,7 +13,7 @@ type logger struct {
 
 func newLogger(prefix string, customLogger *log.Logger) (l *logger) {
 	l = &logger{
-		prefix:	prefix,
+		prefix:       prefix,
 		customLogger: customLogger,
 	}
 
