@@ -18,8 +18,8 @@ import (
 func main() {
 	var err error
 	var help bool
-	var client *modbus.ModbusClient
-	var config *modbus.ClientConfiguration
+	var client *modbus.Client
+	var config *modbus.Configuration
 	var target string
 	var caPath string   // path to TLS CA/server certificate
 	var certPath string // path to TLS client certificate
@@ -34,7 +34,7 @@ func main() {
 	var timeout string
 	var cEndianess modbus.Endianness
 	var cWordOrder modbus.WordOrder
-	var unitId uint
+	var unitID uint
 	var runList []operation
 
 	flag.StringVar(&target, "target", "", "target device to connect to (e.g. tcp://somehost:502) [required]")
@@ -45,7 +45,7 @@ func main() {
 	flag.StringVar(&timeout, "timeout", "3s", "timeout value")
 	flag.StringVar(&endianness, "endianness", "big", "register endianness <little|big>")
 	flag.StringVar(&wordOrder, "word-order", "highfirst", "word ordering for 32-bit registers <highfirst|hf|lowfirst|lf>")
-	flag.UintVar(&unitId, "unit-id", 1, "unit/slave id to use")
+	flag.UintVar(&unitID, "unit-id", 1, "unit/slave id to use")
 	flag.StringVar(&certPath, "cert", "", "path to TLS client certificate")
 	flag.StringVar(&keyPath, "key", "", "path to TLS client key")
 	flag.StringVar(&caPath, "ca", "", "path to TLS CA/server certificate")
@@ -63,7 +63,7 @@ func main() {
 	}
 
 	// create and populate the client configuration object
-	config = &modbus.ClientConfiguration{
+	config = &modbus.Configuration{
 		URL:      target,
 		Speed:    speed,
 		DataBits: dataBits,
@@ -103,9 +103,9 @@ func main() {
 	// parse encoding (endianness and word order) settings
 	switch endianness {
 	case "big":
-		cEndianess = modbus.BIG_ENDIAN
+		cEndianess = modbus.BigEndian
 	case "little":
-		cEndianess = modbus.LITTLE_ENDIAN
+		cEndianess = modbus.LittleEndian
 	default:
 		fmt.Printf("unknown endianness setting '%s' (should either be big or little)\n",
 			endianness)
@@ -114,9 +114,9 @@ func main() {
 
 	switch wordOrder {
 	case "highfirst", "hf":
-		cWordOrder = modbus.HIGH_WORD_FIRST
+		cWordOrder = modbus.HighWordFirst
 	case "lowfirst", "lf":
-		cWordOrder = modbus.LOW_WORD_FIRST
+		cWordOrder = modbus.LowWordFirst
 	default:
 		fmt.Printf("unknown word order setting '%s' (should be one of highfirst, hf, littlefirst, lf)\n",
 			wordOrder)
@@ -350,8 +350,8 @@ func main() {
 				os.Exit(2)
 			}
 
-			o.op = setUnitId
-			o.unitId, err = parseUnitId(splitArgs[1])
+			o.op = setUnitID
+			o.unitID, err = parseUnitID(splitArgs[1])
 			if err != nil {
 				fmt.Printf("failed to parse '%s' as unit id: %v\n", splitArgs[1], err)
 				os.Exit(2)
@@ -452,11 +452,11 @@ func main() {
 
 	// set the initial unit id (note: this can be changed later at runtime through
 	// the setUnitId command)
-	if unitId > 0xff {
-		fmt.Printf("set unit id: value '%v' out of range\n", unitId)
+	if unitID > 0xff {
+		fmt.Printf("set unit id: value '%v' out of range\n", unitID)
 		os.Exit(1)
 	}
-	client.SetUnitId(uint8(unitId))
+	client.SetUnitID(uint8(unitID))
 
 	// connect to the remote host/open the serial port
 	err = client.Open()
@@ -491,9 +491,9 @@ func main() {
 			var res []uint16
 
 			if o.isHoldingReg {
-				res, err = client.ReadRegisters(o.addr, o.quantity+1, modbus.HOLDING_REGISTER)
+				res, err = client.ReadRegisters(o.addr, o.quantity+1, modbus.HoldingRegister)
 			} else {
-				res, err = client.ReadRegisters(o.addr, o.quantity+1, modbus.INPUT_REGISTER)
+				res, err = client.ReadRegisters(o.addr, o.quantity+1, modbus.InputRegister)
 			}
 			if err != nil {
 				fmt.Printf("failed to read holding/input registers: %v\n", err)
@@ -517,9 +517,9 @@ func main() {
 			var res []uint32
 
 			if o.isHoldingReg {
-				res, err = client.ReadUint32s(o.addr, o.quantity+1, modbus.HOLDING_REGISTER)
+				res, err = client.ReadUint32s(o.addr, o.quantity+1, modbus.HoldingRegister)
 			} else {
-				res, err = client.ReadUint32s(o.addr, o.quantity+1, modbus.INPUT_REGISTER)
+				res, err = client.ReadUint32s(o.addr, o.quantity+1, modbus.InputRegister)
 			}
 			if err != nil {
 				fmt.Printf("failed to read holding/input registers: %v\n", err)
@@ -543,9 +543,9 @@ func main() {
 			var res []float32
 
 			if o.isHoldingReg {
-				res, err = client.ReadFloat32s(o.addr, o.quantity+1, modbus.HOLDING_REGISTER)
+				res, err = client.ReadFloat32s(o.addr, o.quantity+1, modbus.HoldingRegister)
 			} else {
-				res, err = client.ReadFloat32s(o.addr, o.quantity+1, modbus.INPUT_REGISTER)
+				res, err = client.ReadFloat32s(o.addr, o.quantity+1, modbus.InputRegister)
 			}
 			if err != nil {
 				fmt.Printf("failed to read holding/input registers: %v\n", err)
@@ -562,9 +562,9 @@ func main() {
 			var res []uint64
 
 			if o.isHoldingReg {
-				res, err = client.ReadUint64s(o.addr, o.quantity+1, modbus.HOLDING_REGISTER)
+				res, err = client.ReadUint64s(o.addr, o.quantity+1, modbus.HoldingRegister)
 			} else {
-				res, err = client.ReadUint64s(o.addr, o.quantity+1, modbus.INPUT_REGISTER)
+				res, err = client.ReadUint64s(o.addr, o.quantity+1, modbus.InputRegister)
 			}
 			if err != nil {
 				fmt.Printf("failed to read holding/input registers: %v\n", err)
@@ -588,9 +588,9 @@ func main() {
 			var res []float64
 
 			if o.isHoldingReg {
-				res, err = client.ReadFloat64s(o.addr, o.quantity+1, modbus.HOLDING_REGISTER)
+				res, err = client.ReadFloat64s(o.addr, o.quantity+1, modbus.HoldingRegister)
 			} else {
-				res, err = client.ReadFloat64s(o.addr, o.quantity+1, modbus.INPUT_REGISTER)
+				res, err = client.ReadFloat64s(o.addr, o.quantity+1, modbus.InputRegister)
 			}
 			if err != nil {
 				fmt.Printf("failed to read holding/input registers: %v\n", err)
@@ -607,9 +607,9 @@ func main() {
 			var res []byte
 
 			if o.isHoldingReg {
-				res, err = client.ReadBytes(o.addr, o.quantity+1, modbus.HOLDING_REGISTER)
+				res, err = client.ReadBytes(o.addr, o.quantity+1, modbus.HoldingRegister)
 			} else {
-				res, err = client.ReadBytes(o.addr, o.quantity+1, modbus.INPUT_REGISTER)
+				res, err = client.ReadBytes(o.addr, o.quantity+1, modbus.InputRegister)
 			}
 			if err != nil {
 				fmt.Printf("failed to read holding/input registers: %v\n", err)
@@ -733,8 +733,8 @@ func main() {
 		case sleep:
 			time.Sleep(o.duration)
 
-		case setUnitId:
-			client.SetUnitId(o.unitId)
+		case setUnitID:
+			client.SetUnitID(o.unitID)
 
 		case repeat:
 			// start over
@@ -783,7 +783,7 @@ const (
 	writeUint64
 	writeFloat64
 	writeBytes
-	setUnitId
+	setUnitID
 	sleep
 	repeat
 	date
@@ -806,7 +806,7 @@ type operation struct {
 	f64          float64
 	bytes        []byte
 	duration     time.Duration
-	unitId       uint8
+	unitID       uint8
 }
 
 func parseUint16(in string) (u16 uint16, err error) {
@@ -919,7 +919,7 @@ func parseAddressAndQuantity(in string) (addr uint16, quantity uint16, err error
 	return
 }
 
-func parseUnitId(in string) (addr uint8, err error) {
+func parseUnitID(in string) (addr uint8, err error) {
 	var val uint64
 
 	val, err = strconv.ParseUint(in, 0, 8)
@@ -936,7 +936,7 @@ func parseHexBytes(in string) (out []byte, err error) {
 	return
 }
 
-func performBoolScan(client *modbus.ModbusClient, isCoil bool) {
+func performBoolScan(client *modbus.Client, isCoil bool) {
 	var err error
 	var addr uint32
 	var val bool
@@ -975,7 +975,7 @@ func performBoolScan(client *modbus.ModbusClient, isCoil bool) {
 	return
 }
 
-func performRegisterScan(client *modbus.ModbusClient, isHoldingReg bool) {
+func performRegisterScan(client *modbus.Client, isHoldingReg bool) {
 	var err error
 	var addr uint32
 	var val uint16
@@ -992,9 +992,9 @@ func performRegisterScan(client *modbus.ModbusClient, isHoldingReg bool) {
 
 	for addr = 0; addr <= 0xffff; addr++ {
 		if isHoldingReg {
-			val, err = client.ReadRegister(uint16(addr), modbus.HOLDING_REGISTER)
+			val, err = client.ReadRegister(uint16(addr), modbus.HoldingRegister)
 		} else {
-			val, err = client.ReadRegister(uint16(addr), modbus.INPUT_REGISTER)
+			val, err = client.ReadRegister(uint16(addr), modbus.InputRegister)
 		}
 		if err == modbus.ErrIllegalDataAddress || err == modbus.ErrIllegalFunction {
 			// the register does not exist
@@ -1015,7 +1015,7 @@ func performRegisterScan(client *modbus.ModbusClient, isHoldingReg bool) {
 	return
 }
 
-func performPing(client *modbus.ModbusClient, count uint16, interval time.Duration) {
+func performPing(client *modbus.Client, count uint16, interval time.Duration) {
 	var err error
 	var okCount uint
 	var timeoutCount uint
@@ -1033,7 +1033,7 @@ func performPing(client *modbus.ModbusClient, count uint16, interval time.Durati
 
 	for run := uint16(0); run < count; run++ {
 		ts = time.Now()
-		_, err = client.ReadRegister(0x0000, modbus.HOLDING_REGISTER)
+		_, err = client.ReadRegister(0x0000, modbus.HoldingRegister)
 
 		rtt = time.Since(ts)
 		avgRTT += rtt

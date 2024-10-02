@@ -91,7 +91,7 @@ import (
 func main() {
 	var err error
 	var eh *exampleHandler
-	var server *modbus.ModbusServer
+	var server *modbus.Server
 	var serverKeyPair tls.Certificate
 	var clientCertPool *x509.CertPool
 	var ticker *time.Ticker
@@ -158,10 +158,6 @@ func main() {
 		eh.clock++
 		eh.lock.Unlock()
 	}
-
-	// never reached
-
-	return
 }
 
 // Example handler object, passed to the NewServer() constructor above.

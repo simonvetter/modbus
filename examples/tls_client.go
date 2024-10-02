@@ -18,7 +18,7 @@ import (
  */
 
 func main() {
-	var client *modbus.ModbusClient
+	var client *modbus.Client
 	var err error
 	var clientKeyPair tls.Certificate
 	var serverCertPool *x509.CertPool
@@ -43,7 +43,7 @@ func main() {
 
 	// create a client targetting host secure-plc on port 802 using
 	// modbus TCP over TLS (MBAPS)
-	client, err = modbus.NewClient(&modbus.ClientConfiguration{
+	client, err = modbus.NewClient(&modbus.Configuration{
 		// tcp+tls is the moniker for MBAPS (modbus/tcp encapsulated in
 		// TLS),
 		// 802/tcp is the IANA-registered port for MBAPS.
@@ -66,7 +66,7 @@ func main() {
 	}
 
 	// read two 16-bit holding registers at address 0x4000
-	regs, err = client.ReadRegisters(0x4000, 2, modbus.HOLDING_REGISTER)
+	regs, err = client.ReadRegisters(0x4000, 2, modbus.HoldingRegister)
 	if err != nil {
 		fmt.Printf("failed to read registers 0x4000 and 0x4001: %v\n", err)
 	} else {

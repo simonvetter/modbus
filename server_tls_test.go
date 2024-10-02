@@ -107,15 +107,15 @@ isPLG4c6aPGxSbHirNfl6tBSngDy+A==
 // TestTLSServer tests the TLS layer of the modbus server.
 func TestTLSServer(t *testing.T) {
 	var err error
-	var server *ModbusServer
+	var server *Server
 	var serverKeyPair tls.Certificate
 	var client1KeyPair tls.Certificate
 	var client2KeyPair tls.Certificate
 	var clientCp *x509.CertPool
 	var serverCp *x509.CertPool
 	var th *tlsTestHandler
-	var c1 *ModbusClient
-	var c2 *ModbusClient
+	var c1 *Client
+	var c2 *Client
 	var regs []uint16
 	var coils []bool
 
@@ -172,7 +172,7 @@ func TestTLSServer(t *testing.T) {
 	}
 
 	// create 2 modbus clients
-	c1, err = NewClient(&ClientConfiguration{
+	c1, err = NewClient(&Configuration{
 		URL:           "tcp+tls://localhost:5802",
 		TLSClientCert: &client1KeyPair,
 		TLSRootCAs:    clientCp,
@@ -180,7 +180,7 @@ func TestTLSServer(t *testing.T) {
 	if err != nil {
 		t.Errorf("failed to create client: %v", err)
 	}
-	c2, err = NewClient(&ClientConfiguration{
+	c2, err = NewClient(&Configuration{
 		URL:           "tcp+tls://localhost:5802",
 		TLSClientCert: &client2KeyPair,
 		TLSRootCAs:    clientCp,
@@ -261,21 +261,21 @@ func TestTLSServer(t *testing.T) {
 
 	// client #1 should only be allowed access to holding registers of unit id #1
 	// while client#2 should be allowed access to holding registers of unit ids #1 and #4
-	c1.SetUnitId(1)
+	c1.SetUnitID(1)
 	err = c1.WriteRegister(2, 100)
 	if err != nil {
 		t.Errorf("c1.WriteRegister() should have succeeded, got: %v", err)
 	}
 
-	c1.SetUnitId(4)
+	c1.SetUnitID(4)
 	err = c1.WriteRegister(2, 200)
 	if err != ErrIllegalFunction {
 		t.Errorf("c1.WriteRegister() should have failed with %v, got: %v",
 			ErrIllegalFunction, err)
 	}
 
-	c2.SetUnitId(1)
-	regs, err = c2.ReadRegisters(1, 2, HOLDING_REGISTER)
+	c2.SetUnitID(1)
+	regs, err = c2.ReadRegisters(1, 2, HoldingRegister)
 	if err != nil {
 		t.Errorf("c2.ReadRegisters() should have succeeded, got: %v", err)
 	}
@@ -283,13 +283,13 @@ func TestTLSServer(t *testing.T) {
 		t.Errorf("unexpected register values: %v", regs)
 	}
 
-	c2.SetUnitId(4)
+	c2.SetUnitID(4)
 	err = c2.WriteRegister(2, 200)
 	if err != nil {
 		t.Errorf("c2.WriteRegister() should have succeeded, got: %v", err)
 	}
 
-	regs, err = c2.ReadRegisters(1, 2, HOLDING_REGISTER)
+	regs, err = c2.ReadRegisters(1, 2, HoldingRegister)
 	if err != nil {
 		t.Errorf("c2.ReadRegisters() should have succeeded, got: %v", err)
 	}
@@ -317,8 +317,8 @@ func TestTLSServer(t *testing.T) {
 
 type tlsTestHandler struct {
 	coils      [10]bool
-	holdingId1 [10]uint16
-	holdingId4 [10]uint16
+	holdingID1 [10]uint16
+	holdingID4 [10]uint16
 }
 
 func (th *tlsTestHandler) HandleCoils(req *CoilsRequest) (res []bool, err error) {
@@ -354,34 +354,34 @@ func (th *tlsTestHandler) HandleDiscreteInputs(req *DiscreteInputsRequest) (res 
 func (th *tlsTestHandler) HandleHoldingRegisters(req *HoldingRegistersRequest) (res []uint16, err error) {
 	// gate unit id #4 behind the "operator2" role while access to unit id #1
 	// is allowed to any valid cert
-	if req.UnitId == 0x04 {
+	if req.UnitID == 0x04 {
 		if req.ClientRole != "operator2" {
 			err = ErrIllegalFunction
 			return
 		}
 
-		if req.Addr+req.Quantity > uint16(len(th.holdingId4)) {
+		if req.Addr+req.Quantity > uint16(len(th.holdingID4)) {
 			err = ErrIllegalDataAddress
 			return
 		}
 
 		for i := 0; i < int(req.Quantity); i++ {
 			if req.IsWrite {
-				th.holdingId4[int(req.Addr)+i] = req.Args[i]
+				th.holdingID4[int(req.Addr)+i] = req.Args[i]
 			}
-			res = append(res, th.holdingId4[int(req.Addr)+i])
+			res = append(res, th.holdingID4[int(req.Addr)+i])
 		}
-	} else if req.UnitId == 0x01 {
-		if req.Addr+req.Quantity > uint16(len(th.holdingId1)) {
+	} else if req.UnitID == 0x01 {
+		if req.Addr+req.Quantity > uint16(len(th.holdingID1)) {
 			err = ErrIllegalDataAddress
 			return
 		}
 
 		for i := 0; i < int(req.Quantity); i++ {
 			if req.IsWrite {
-				th.holdingId1[int(req.Addr)+i] = req.Args[i]
+				th.holdingID1[int(req.Addr)+i] = req.Args[i]
 			}
-			res = append(res, th.holdingId1[int(req.Addr)+i])
+			res = append(res, th.holdingID1[int(req.Addr)+i])
 		}
 	} else {
 		err = ErrIllegalFunction
@@ -399,13 +399,13 @@ func (th *tlsTestHandler) HandleInputRegisters(req *InputRegistersRequest) (res 
 }
 
 func TestServerExtractRole(t *testing.T) {
-	var ms *ModbusServer
+	var ms *Server
 	var pemBlock *pem.Block
 	var x509Cert *x509.Certificate
 	var err error
 	var role string
 
-	ms = &ModbusServer{
+	ms = &Server{
 		logger: newLogger("test-server-role-extraction", nil),
 	}
 

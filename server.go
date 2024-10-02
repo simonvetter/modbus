@@ -18,7 +18,7 @@ var modbusRoleOID asn1.ObjectIdentifier = asn1.ObjectIdentifier{
 	1, 3, 6, 1, 4, 1, 50316, 802, 1,
 }
 
-// Server configuration object.
+// ServerConfiguration object
 type ServerConfiguration struct {
 	// URL defines where to listen at e.g. tcp://[::]:502
 	URL string
@@ -38,11 +38,11 @@ type ServerConfiguration struct {
 	Logger *log.Logger
 }
 
-// Request object passed to the coil handler.
+// CoilsRequest is an object passed to the coil handler.
 type CoilsRequest struct {
 	ClientAddr string // the source (client) IP address
 	ClientRole string // the client role as encoded in the client certificate (tcp+tls only)
-	UnitId     uint8  // the requested unit id (slave id)
+	UnitID     uint8  // the requested unit id (slave id)
 	Addr       uint16 // the base coil address requested
 	Quantity   uint16 // the number of consecutive coils covered by this request
 	// (first address: Addr, last address: Addr + Quantity - 1)
@@ -51,20 +51,20 @@ type CoilsRequest struct {
 	// from Addr to Addr + Quantity - 1 (for writes only)
 }
 
-// Request object passed to the discrete input handler.
+// DiscreteInputsRequest is an object passed to the discrete input handler.
 type DiscreteInputsRequest struct {
 	ClientAddr string // the source (client) IP address
 	ClientRole string // the client role as encoded in the client certificate (tcp+tls only)
-	UnitId     uint8  // the requested unit id (slave id)
+	UnitID     uint8  // the requested unit id (slave id)
 	Addr       uint16 // the base discrete input address requested
 	Quantity   uint16 // the number of consecutive discrete inputs covered by this request
 }
 
-// Request object passed to the holding register handler.
+// HoldingRegistersRequest is an object passed to the holding register handler.
 type HoldingRegistersRequest struct {
 	ClientAddr string   // the source (client) IP address
 	ClientRole string   // the client role as encoded in the client certificate (tcp+tls only)
-	UnitId     uint8    // the requested unit id (slave id)
+	UnitID     uint8    // the requested unit id (slave id)
 	Addr       uint16   // the base register address requested
 	Quantity   uint16   // the number of consecutive registers covered by this request
 	IsWrite    bool     // true if the request is a write, false if a read
@@ -72,11 +72,11 @@ type HoldingRegistersRequest struct {
 	// Addr to Addr + Quantity - 1 (for writes only)
 }
 
-// Request object passed to the input register handler.
+// InputRegistersRequest is an object passed to the input register handler.
 type InputRegistersRequest struct {
 	ClientAddr string // the source (client) IP address
 	ClientRole string // the client role as encoded in the client certificate (tcp+tls only)
-	UnitId     uint8  // the requested unit id (slave id)
+	UnitID     uint8  // the requested unit id (slave id)
 	Addr       uint16 // the base register address requested
 	Quantity   uint16 // the number of consecutive registers covered by this request
 }
@@ -139,8 +139,8 @@ type RequestHandler interface {
 	HandleInputRegisters(req *InputRegistersRequest) (res []uint16, err error)
 }
 
-// Modbus server object.
-type ModbusServer struct {
+// Server object.
+type Server struct {
 	conf          ServerConfiguration
 	logger        *logger
 	lock          sync.Mutex
@@ -151,15 +151,13 @@ type ModbusServer struct {
 	transportType transportType
 }
 
-// Returns a new modbus server.
-// reqHandler should be a user-provided handler object satisfying the RequestHandler
-// interface.
+// NewServer creates a new modbus server.
 func NewServer(conf *ServerConfiguration, reqHandler RequestHandler) (
-	ms *ModbusServer, err error) {
+	ms *Server, err error) {
 	var serverType string
 	var splitURL []string
 
-	ms = &ModbusServer{
+	ms = &Server{
 		conf:    *conf,
 		handler: reqHandler,
 	}
@@ -225,8 +223,8 @@ func NewServer(conf *ServerConfiguration, reqHandler RequestHandler) (
 	return
 }
 
-// Starts accepting client connections.
-func (ms *ModbusServer) Start() (err error) {
+// Start accepting client connections.
+func (ms *Server) Start() (err error) {
 	ms.lock.Lock()
 	defer ms.lock.Unlock()
 
@@ -255,8 +253,8 @@ func (ms *ModbusServer) Start() (err error) {
 	return
 }
 
-// Stops accepting new client connections and closes any active session.
-func (ms *ModbusServer) Stop() (err error) {
+// Stop accepting new client connections and closes any active session.
+func (ms *Server) Stop() (err error) {
 	ms.lock.Lock()
 	defer ms.lock.Unlock()
 
@@ -282,7 +280,7 @@ func (ms *ModbusServer) Stop() (err error) {
 // Accepts new client connections if the configured connection limit allows it.
 // Each connection is served from a dedicated goroutine to allow for concurrent
 // connections.
-func (ms *ModbusServer) acceptTCPClients() {
+func (ms *Server) acceptTCPClients() {
 	var sock net.Conn
 	var err error
 	var accepted bool
@@ -326,7 +324,7 @@ func (ms *ModbusServer) acceptTCPClients() {
 // Once handleTransport() returns (i.e. the connection has either closed, timed
 // out, or an unrecoverable error happened), the TCP socket is closed and removed
 // from the list of active client connections.
-func (ms *ModbusServer) handleTCPClient(sock net.Conn) {
+func (ms *Server) handleTCPClient(sock net.Conn) {
 	var err error
 	var clientRole string
 	var tlsSock net.Conn
@@ -375,7 +373,7 @@ func (ms *ModbusServer) handleTCPClient(sock net.Conn) {
 // For each request read from the transport, performs decoding and validation,
 // calls the user-provided handler, then encodes and writes the response
 // to the transport.
-func (ms *ModbusServer) handleTransport(t transport, clientAddr string, clientRole string) {
+func (ms *Server) handleTransport(t transport, clientAddr string, clientRole string) {
 	var req *pdu
 	var res *pdu
 	var err error
@@ -399,8 +397,8 @@ func (ms *ModbusServer) handleTransport(t transport, clientAddr string, clientRo
 			}
 
 			// decode address and quantity fields
-			addr = bytesToUint16(BIG_ENDIAN, req.payload[0:2])
-			quantity = bytesToUint16(BIG_ENDIAN, req.payload[2:4])
+			addr = bytesToUint16(BigEndian, req.payload[0:2])
+			quantity = bytesToUint16(BigEndian, req.payload[2:4])
 
 			// ensure the reply never exceeds the maximum PDU length and we
 			// never read past 0xffff
@@ -418,7 +416,7 @@ func (ms *ModbusServer) handleTransport(t transport, clientAddr string, clientRo
 				coils, err = ms.handler.HandleCoils(&CoilsRequest{
 					ClientAddr: clientAddr,
 					ClientRole: clientRole,
-					UnitId:     req.unitId,
+					UnitID:     req.unitID,
 					Addr:       addr,
 					Quantity:   quantity,
 					IsWrite:    false,
@@ -429,7 +427,7 @@ func (ms *ModbusServer) handleTransport(t transport, clientAddr string, clientRo
 					&DiscreteInputsRequest{
 						ClientAddr: clientAddr,
 						ClientRole: clientRole,
-						UnitId:     req.unitId,
+						UnitID:     req.unitID,
 						Addr:       addr,
 						Quantity:   quantity,
 					})
@@ -450,7 +448,7 @@ func (ms *ModbusServer) handleTransport(t transport, clientAddr string, clientRo
 
 			// assemble a response PDU
 			res = &pdu{
-				unitId:       req.unitId,
+				unitID:       req.unitID,
 				functionCode: req.functionCode,
 				payload:      []byte{0},
 			}
@@ -471,7 +469,7 @@ func (ms *ModbusServer) handleTransport(t transport, clientAddr string, clientRo
 			}
 
 			// decode the address field
-			addr = bytesToUint16(BIG_ENDIAN, req.payload[0:2])
+			addr = bytesToUint16(BigEndian, req.payload[0:2])
 
 			// validate the value field (should be either 0xff00 or 0x0000)
 			if (req.payload[2] != 0xff && req.payload[2] != 0x00) ||
@@ -484,7 +482,7 @@ func (ms *ModbusServer) handleTransport(t transport, clientAddr string, clientRo
 			_, err = ms.handler.HandleCoils(&CoilsRequest{
 				ClientAddr: clientAddr,
 				ClientRole: clientRole,
-				UnitId:     req.unitId,
+				UnitID:     req.unitID,
 				Addr:       addr,
 				Quantity:   1,    // request for a single coil
 				IsWrite:    true, // this is a write request
@@ -497,13 +495,13 @@ func (ms *ModbusServer) handleTransport(t transport, clientAddr string, clientRo
 
 			// assemble a response PDU
 			res = &pdu{
-				unitId:       req.unitId,
+				unitID:       req.unitID,
 				functionCode: req.functionCode,
 			}
 
 			// echo the address and value in the response
 			res.payload = append(res.payload,
-				uint16ToBytes(BIG_ENDIAN, addr)...)
+				uint16ToBytes(BigEndian, addr)...)
 			res.payload = append(res.payload,
 				req.payload[2], req.payload[3])
 
@@ -516,8 +514,8 @@ func (ms *ModbusServer) handleTransport(t transport, clientAddr string, clientRo
 			}
 
 			// decode address and quantity fields
-			addr = bytesToUint16(BIG_ENDIAN, req.payload[0:2])
-			quantity = bytesToUint16(BIG_ENDIAN, req.payload[2:4])
+			addr = bytesToUint16(BigEndian, req.payload[0:2])
+			quantity = bytesToUint16(BigEndian, req.payload[2:4])
 
 			// ensure the reply never exceeds the maximum PDU length and we
 			// never read past 0xffff
@@ -551,7 +549,7 @@ func (ms *ModbusServer) handleTransport(t transport, clientAddr string, clientRo
 			_, err = ms.handler.HandleCoils(&CoilsRequest{
 				ClientAddr: clientAddr,
 				ClientRole: clientRole,
-				UnitId:     req.unitId,
+				UnitID:     req.unitID,
 				Addr:       addr,
 				Quantity:   quantity,
 				IsWrite:    true, // this is a write request
@@ -564,15 +562,15 @@ func (ms *ModbusServer) handleTransport(t transport, clientAddr string, clientRo
 
 			// assemble a response PDU
 			res = &pdu{
-				unitId:       req.unitId,
+				unitID:       req.unitID,
 				functionCode: req.functionCode,
 			}
 
 			// echo the address and quantity in the response
 			res.payload = append(res.payload,
-				uint16ToBytes(BIG_ENDIAN, addr)...)
+				uint16ToBytes(BigEndian, addr)...)
 			res.payload = append(res.payload,
-				uint16ToBytes(BIG_ENDIAN, quantity)...)
+				uint16ToBytes(BigEndian, quantity)...)
 
 		case fcReadHoldingRegisters, fcReadInputRegisters:
 			var regs []uint16
@@ -584,8 +582,8 @@ func (ms *ModbusServer) handleTransport(t transport, clientAddr string, clientRo
 			}
 
 			// decode address and quantity fields
-			addr = bytesToUint16(BIG_ENDIAN, req.payload[0:2])
-			quantity = bytesToUint16(BIG_ENDIAN, req.payload[2:4])
+			addr = bytesToUint16(BigEndian, req.payload[0:2])
+			quantity = bytesToUint16(BigEndian, req.payload[2:4])
 
 			// ensure the reply never exceeds the maximum PDU length and we
 			// never read past 0xffff
@@ -604,7 +602,7 @@ func (ms *ModbusServer) handleTransport(t transport, clientAddr string, clientRo
 					&HoldingRegistersRequest{
 						ClientAddr: clientAddr,
 						ClientRole: clientRole,
-						UnitId:     req.unitId,
+						UnitID:     req.unitID,
 						Addr:       addr,
 						Quantity:   quantity,
 						IsWrite:    false,
@@ -615,7 +613,7 @@ func (ms *ModbusServer) handleTransport(t transport, clientAddr string, clientRo
 					&InputRegistersRequest{
 						ClientAddr: clientAddr,
 						ClientRole: clientRole,
-						UnitId:     req.unitId,
+						UnitID:     req.unitID,
 						Addr:       addr,
 						Quantity:   quantity,
 					})
@@ -636,7 +634,7 @@ func (ms *ModbusServer) handleTransport(t transport, clientAddr string, clientRo
 
 			// assemble a response PDU
 			res = &pdu{
-				unitId:       req.unitId,
+				unitID:       req.unitID,
 				functionCode: req.functionCode,
 				payload:      []byte{0},
 			}
@@ -646,7 +644,7 @@ func (ms *ModbusServer) handleTransport(t transport, clientAddr string, clientRo
 
 			// register values
 			res.payload = append(res.payload,
-				uint16sToBytes(BIG_ENDIAN, regs)...)
+				uint16sToBytes(BigEndian, regs)...)
 
 		case fcWriteSingleRegister:
 			var value uint16
@@ -657,15 +655,15 @@ func (ms *ModbusServer) handleTransport(t transport, clientAddr string, clientRo
 			}
 
 			// decode address and value fields
-			addr = bytesToUint16(BIG_ENDIAN, req.payload[0:2])
-			value = bytesToUint16(BIG_ENDIAN, req.payload[2:4])
+			addr = bytesToUint16(BigEndian, req.payload[0:2])
+			value = bytesToUint16(BigEndian, req.payload[2:4])
 
 			// invoke the handler
 			_, err = ms.handler.HandleHoldingRegisters(
 				&HoldingRegistersRequest{
 					ClientAddr: clientAddr,
 					ClientRole: clientRole,
-					UnitId:     req.unitId,
+					UnitID:     req.unitID,
 					Addr:       addr,
 					Quantity:   1,    // request for a single register
 					IsWrite:    true, // request is a write
@@ -678,15 +676,15 @@ func (ms *ModbusServer) handleTransport(t transport, clientAddr string, clientRo
 
 			// assemble a response PDU
 			res = &pdu{
-				unitId:       req.unitId,
+				unitID:       req.unitID,
 				functionCode: req.functionCode,
 			}
 
 			// echo the address and value in the response
 			res.payload = append(res.payload,
-				uint16ToBytes(BIG_ENDIAN, addr)...)
+				uint16ToBytes(BigEndian, addr)...)
 			res.payload = append(res.payload,
-				uint16ToBytes(BIG_ENDIAN, value)...)
+				uint16ToBytes(BigEndian, value)...)
 
 		case fcWriteMultipleRegisters:
 			var expectedLen int
@@ -697,8 +695,8 @@ func (ms *ModbusServer) handleTransport(t transport, clientAddr string, clientRo
 			}
 
 			// decode address and quantity fields
-			addr = bytesToUint16(BIG_ENDIAN, req.payload[0:2])
-			quantity = bytesToUint16(BIG_ENDIAN, req.payload[2:4])
+			addr = bytesToUint16(BigEndian, req.payload[0:2])
+			quantity = bytesToUint16(BigEndian, req.payload[2:4])
 
 			// ensure the reply never exceeds the maximum PDU length and we
 			// never read past 0xffff
@@ -730,11 +728,11 @@ func (ms *ModbusServer) handleTransport(t transport, clientAddr string, clientRo
 				&HoldingRegistersRequest{
 					ClientAddr: clientAddr,
 					ClientRole: clientRole,
-					UnitId:     req.unitId,
+					UnitID:     req.unitID,
 					Addr:       addr,
 					Quantity:   quantity,
 					IsWrite:    true, // this is a write request
-					Args:       bytesToUint16s(BIG_ENDIAN, req.payload[5:]),
+					Args:       bytesToUint16s(BigEndian, req.payload[5:]),
 				})
 			if err != nil {
 				break
@@ -742,20 +740,20 @@ func (ms *ModbusServer) handleTransport(t transport, clientAddr string, clientRo
 
 			// assemble a response PDU
 			res = &pdu{
-				unitId:       req.unitId,
+				unitID:       req.unitID,
 				functionCode: req.functionCode,
 			}
 
 			// echo the address and quantity in the response
 			res.payload = append(res.payload,
-				uint16ToBytes(BIG_ENDIAN, addr)...)
+				uint16ToBytes(BigEndian, addr)...)
 			res.payload = append(res.payload,
-				uint16ToBytes(BIG_ENDIAN, quantity)...)
+				uint16ToBytes(BigEndian, quantity)...)
 
 		default:
 			res = &pdu{
 				// reply with the request target unit ID
-				unitId: req.unitId,
+				unitID: req.unitID,
 				// set the error bit
 				functionCode: (0x80 | req.functionCode),
 				// set the exception code to illegal function to indicate that
@@ -782,12 +780,11 @@ func (ms *ModbusServer) handleTransport(t transport, clientAddr string, clientRo
 					clientAddr)
 				t.Close()
 				return
-			} else {
-				res = &pdu{
-					unitId:       req.unitId,
-					functionCode: (0x80 | req.functionCode),
-					payload:      []byte{mapErrorToExceptionCode(err)},
-				}
+			}
+			res = &pdu{
+				unitID:       req.unitID,
+				functionCode: (0x80 | req.functionCode),
+				payload:      []byte{mapErrorToExceptionCode(err)},
 			}
 		}
 
@@ -808,7 +805,7 @@ func (ms *ModbusServer) handleTransport(t transport, clientAddr string, clientRo
 
 // startTLS performs a full TLS handshake (with client authentication) on tcpSock
 // and returns a 'wrapped' clear-text socket suitable for use by the TCP transport.
-func (ms *ModbusServer) startTLS(tcpSock net.Conn) (
+func (ms *Server) startTLS(tcpSock net.Conn) (
 	tlsSock *tls.Conn, clientRole string, err error) {
 	var connState tls.ConnectionState
 
@@ -855,7 +852,7 @@ func (ms *ModbusServer) startTLS(tcpSock net.Conn) (
 // role as a string.
 // If no role extension is found, a nil string is returned (R-23).
 // If multiple or invalid role extensions are found, a nil string is returned (R-65, R-22).
-func (ms *ModbusServer) extractRole(cert *x509.Certificate) (role string) {
+func (ms *Server) extractRole(cert *x509.Certificate) (role string) {
 	var err error
 	var found bool
 	var badCert bool

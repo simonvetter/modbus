@@ -14,7 +14,7 @@ func TestAssembleMBAPFrame(t *testing.T) {
 	tt = &tcpTransport{}
 
 	frame = tt.assembleMBAPFrame(0x9219, &pdu{
-		unitId:       0x33,
+		unitID:       0x33,
 		functionCode: 0x11,
 		payload:      []byte{0x22, 0x33, 0x44, 0x55},
 	})
@@ -36,7 +36,7 @@ func TestAssembleMBAPFrame(t *testing.T) {
 	}
 
 	frame = tt.assembleMBAPFrame(0x921a, &pdu{
-		unitId:       0x31,
+		unitID:       0x31,
 		functionCode: 0x06,
 		payload:      []byte{0x12, 0x34},
 	})
@@ -71,7 +71,7 @@ func TestTCPTransportReadResponse(t *testing.T) {
 	go feedTestPipe(t, txchan, p1)
 
 	tt = newTCPTransport(p2, 10*time.Millisecond, nil)
-	tt.lastTxnId = 0x9218
+	tt.lastTxnID = 0x9218
 
 	// read a valid response
 	txchan <- []byte{
@@ -85,8 +85,8 @@ func TestTCPTransportReadResponse(t *testing.T) {
 	if err != nil {
 		t.Errorf("readResponse() should have succeeded, got %v", err)
 	}
-	if res.unitId != 0x31 {
-		t.Errorf("expected 0x31 as unit id, got 0x%02x", res.unitId)
+	if res.unitID != 0x31 {
+		t.Errorf("expected 0x31 as unit id, got 0x%02x", res.unitID)
 	}
 	if res.functionCode != 0x06 {
 		t.Errorf("expected 0x06 as function code, got 0x%02x", res.functionCode)
@@ -119,8 +119,8 @@ func TestTCPTransportReadResponse(t *testing.T) {
 	if err != nil {
 		t.Errorf("readResponse() should have succeeded, got %v", err)
 	}
-	if res.unitId != 0x39 {
-		t.Errorf("expected 0x39 as unit id, got 0x%02x", res.unitId)
+	if res.unitID != 0x39 {
+		t.Errorf("expected 0x39 as unit id, got 0x%02x", res.unitID)
 	}
 	if res.functionCode != 0x02 {
 		t.Errorf("expected 0x02 as function code, got 0x%02x", res.functionCode)
@@ -169,8 +169,8 @@ func TestTCPTransportReadResponse(t *testing.T) {
 	if err != nil {
 		t.Errorf("readResponse() should have succeeded, got %v", err)
 	}
-	if res.unitId != 0x31 {
-		t.Errorf("expected 0x31 as unit id, got 0x%02x", res.unitId)
+	if res.unitID != 0x31 {
+		t.Errorf("expected 0x31 as unit id, got 0x%02x", res.unitID)
 	}
 	if res.functionCode != 0x32 {
 		t.Errorf("expected 0x32 as response code, got 0x%02x", res.functionCode)
@@ -220,7 +220,7 @@ func TestTCPTransportReadRequest(t *testing.T) {
 	go feedTestPipe(t, txchan, p1)
 
 	tt = newTCPTransport(p2, 10*time.Millisecond, nil)
-	tt.lastTxnId = 0x0a00
+	tt.lastTxnID = 0x0a00
 
 	// push three frames in a row:
 	//  - the first with an unknown protocol ID
@@ -252,11 +252,11 @@ func TestTCPTransportReadRequest(t *testing.T) {
 
 	// read the first frame
 	req, err = tt.ReadRequest()
-	if req != nil || err != ErrUnknownProtocolId {
+	if req != nil || err != ErrUnknownProtocolID {
 		t.Errorf("ReadRequest() should have returned {nil, ErrUnknownProtocolId}, got {%v, %v}", req, err)
 	}
-	if tt.lastTxnId != 0x0a00 {
-		t.Errorf("tt.lastTxnId should have been 0x0a00, saw 0x%02x", tt.lastTxnId)
+	if tt.lastTxnID != 0x0a00 {
+		t.Errorf("tt.lastTxnId should have been 0x0a00, saw 0x%02x", tt.lastTxnID)
 	}
 
 	// read the second frame
@@ -264,8 +264,8 @@ func TestTCPTransportReadRequest(t *testing.T) {
 	if req != nil || err != ErrProtocolError {
 		t.Errorf("ReadRequest() should have returned {nil, ErrProtocolError}, got {%v, %v}", req, err)
 	}
-	if tt.lastTxnId != 0x0a00 {
-		t.Errorf("tt.lastTxnId should have been 0x0a00, saw 0x%02x", tt.lastTxnId)
+	if tt.lastTxnID != 0x0a00 {
+		t.Errorf("tt.lastTxnId should have been 0x0a00, saw 0x%02x", tt.lastTxnID)
 	}
 
 	// read the third frame
@@ -276,8 +276,8 @@ func TestTCPTransportReadRequest(t *testing.T) {
 	if req == nil {
 		t.Errorf("ReadREsponse() should have returned a non-nil request")
 	}
-	if req.unitId != 0xfa {
-		t.Errorf("expected 0xfa as unit id, got 0x%02x", req.unitId)
+	if req.unitID != 0xfa {
+		t.Errorf("expected 0xfa as unit id, got 0x%02x", req.unitID)
 	}
 	if req.functionCode != 0x04 {
 		t.Errorf("expected 0x04 as response code, got 0x%02x", req.functionCode)
@@ -296,8 +296,8 @@ func TestTCPTransportReadRequest(t *testing.T) {
 				b, i, req.payload[i])
 		}
 	}
-	if tt.lastTxnId != 0x9218 {
-		t.Errorf("tt.lastTxnId should have been 0x0a00, saw 0x%02x", tt.lastTxnId)
+	if tt.lastTxnID != 0x9218 {
+		t.Errorf("tt.lastTxnId should have been 0x0a00, saw 0x%02x", tt.lastTxnID)
 	}
 
 	return
@@ -346,10 +346,10 @@ func TestTCPTransportWriteResponse(t *testing.T) {
 	}(t, p2, done)
 
 	tt = newTCPTransport(p1, 10*time.Millisecond, nil)
-	tt.lastTxnId = 0xc01f
+	tt.lastTxnID = 0xc01f
 
 	err = tt.WriteResponse(&pdu{
-		unitId:       0x17,
+		unitID:       0x17,
 		functionCode: 0x06,
 		payload: []byte{
 			0x44, 0x55, // payload

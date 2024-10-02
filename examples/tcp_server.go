@@ -25,7 +25,7 @@ const (
 
 // run this with go run examples/tcp_server.go
 func main() {
-	var server *modbus.ModbusServer
+	var server *modbus.Server
 	var err error
 	var eh *exampleHandler
 	var ticker *time.Ticker
@@ -67,9 +67,6 @@ func main() {
 		eh.uptime++
 		eh.lock.Unlock()
 	}
-
-	// never reached
-	return
 }
 
 // Example handler object, passed to the NewServer() constructor above.
@@ -104,7 +101,7 @@ type exampleHandler struct {
 // (read them with ./modbus-cli --target tcp://localhost:5502 rc:0+99, write to register n
 // with ./modbus-cli --target tcp://localhost:5502 wr:n:<true|false>)
 func (eh *exampleHandler) HandleCoils(req *modbus.CoilsRequest) (res []bool, err error) {
-	if req.UnitId != 1 {
+	if req.UnitID != 1 {
 		// only accept unit ID #1
 		// note: we're merely filtering here, but we could as well use the unit
 		// ID field to support multiple register maps in a single server.
@@ -159,7 +156,7 @@ func (eh *exampleHandler) HandleDiscreteInputs(req *modbus.DiscreteInputsRequest
 func (eh *exampleHandler) HandleHoldingRegisters(req *modbus.HoldingRegistersRequest) (res []uint16, err error) {
 	var regAddr uint16
 
-	if req.UnitId != 1 {
+	if req.UnitID != 1 {
 		// only accept unit ID #1
 		err = modbus.ErrIllegalFunction
 		return
@@ -257,7 +254,7 @@ func (eh *exampleHandler) HandleInputRegisters(req *modbus.InputRegistersRequest
 	var unixTs_s uint32
 	var minusOne int16 = -1
 
-	if req.UnitId != 1 {
+	if req.UnitID != 1 {
 		// only accept unit ID #1
 		err = modbus.ErrIllegalFunction
 		return

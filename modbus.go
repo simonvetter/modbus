@@ -5,11 +5,12 @@ import (
 )
 
 type pdu struct {
-	unitId       uint8
+	unitID       uint8
 	functionCode uint8
 	payload      []byte
 }
 
+// Error for modbus errors
 type Error string
 
 // Error implements the error interface.
@@ -36,10 +37,6 @@ const (
 	fcReadWriteMultipleRegisters uint8 = 0x17
 	fcReadFifoQueue              uint8 = 0x18
 
-	// file access
-	fcReadFileRecord  uint8 = 0x14
-	fcWriteFileRecord uint8 = 0x15
-
 	// exception codes
 	exIllegalFunction         uint8 = 0x01
 	exIllegalDataAddress      uint8 = 0x02
@@ -50,8 +47,10 @@ const (
 	exMemoryParityError       uint8 = 0x08
 	exGWPathUnavailable       uint8 = 0x0a
 	exGWTargetFailedToRespond uint8 = 0x0b
+)
 
-	// errors
+// All Modbus errors.
+const (
 	ErrConfigurationError      Error = "configuration error"
 	ErrRequestTimedOut         Error = "request timed out"
 	ErrIllegalFunction         Error = "illegal function"
@@ -66,9 +65,9 @@ const (
 	ErrBadCRC                  Error = "bad crc"
 	ErrShortFrame              Error = "short frame"
 	ErrProtocolError           Error = "protocol error"
-	ErrBadUnitId               Error = "bad unit id"
-	ErrBadTransactionId        Error = "bad transaction id"
-	ErrUnknownProtocolId       Error = "unknown protocol identifier"
+	ErrBadUnitID               Error = "bad unit id"
+	ErrBadTransactionID        Error = "bad transaction id"
+	ErrUnknownProtocolID       Error = "unknown protocol identifier"
 	ErrUnexpectedParameters    Error = "unexpected parameters"
 )
 

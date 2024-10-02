@@ -89,7 +89,7 @@ func (rt *rtuTransport) ExecuteRequest(req *pdu) (res *pdu, err error) {
 	rt.lastActivity = ts.Add(time.Duration(n) * rt.t1)
 
 	// observe inter-frame delays
-	time.Sleep(rt.lastActivity.Add(rt.t35).Sub(time.Now()))
+	time.Sleep(time.Until(rt.lastActivity.Add(rt.t35)))
 
 	// read the response back from the wire
 	res, err = rt.readRTUFrame()
@@ -191,7 +191,7 @@ func (rt *rtuTransport) readRTUFrame() (res *pdu, err error) {
 	}
 
 	res = &pdu{
-		unitId:       rxbuf[0],
+		unitID:       rxbuf[0],
 		functionCode: rxbuf[1],
 		// pass the byte count + trailing data as payload, withtout the CRC
 		payload: rxbuf[2 : 3+bytesNeeded-2],
@@ -204,7 +204,7 @@ func (rt *rtuTransport) readRTUFrame() (res *pdu, err error) {
 func (rt *rtuTransport) assembleRTUFrame(p *pdu) (adu []byte) {
 	var crc crc
 
-	adu = append(adu, p.unitId)
+	adu = append(adu, p.unitID)
 	adu = append(adu, p.functionCode)
 	adu = append(adu, p.payload...)
 
@@ -258,19 +258,17 @@ func discard(link rtuLink) {
 
 	link.SetDeadline(time.Now().Add(500 * time.Microsecond))
 	io.ReadFull(link, rxbuf)
-
-	return
 }
 
 // Returns how long it takes to send 1 byte on a serial line at the
 // specified baud rate.
-func serialCharTime(rate_bps int) (ct time.Duration) {
+func serialCharTime(bps int) (ct time.Duration) {
 	// note: an RTU byte on the wire is:
 	// - 1 start bit,
 	// - 8 data bits,
 	// - 1 parity or stop bit
 	// - 1 stop bit
-	ct = (11) * time.Second / time.Duration(rate_bps)
+	ct = (11) * time.Second / time.Duration(bps)
 
 	return
 }

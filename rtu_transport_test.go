@@ -14,7 +14,7 @@ func TestAssembleRTUFrame(t *testing.T) {
 	rt = &rtuTransport{}
 
 	frame = rt.assembleRTUFrame(&pdu{
-		unitId:       0x33,
+		unitID:       0x33,
 		functionCode: 0x11,
 		payload:      []byte{0x22, 0x33, 0x44, 0x55},
 	})
@@ -35,7 +35,7 @@ func TestAssembleRTUFrame(t *testing.T) {
 	}
 
 	frame = rt.assembleRTUFrame(&pdu{
-		unitId:       0x31,
+		unitID:       0x31,
 		functionCode: 0x06,
 		payload:      []byte{0x12, 0x34},
 	})
@@ -53,8 +53,6 @@ func TestAssembleRTUFrame(t *testing.T) {
 			t.Errorf("expected 0x%02x at position %v, got 0x%02x", b, i, frame[i])
 		}
 	}
-
-	return
 }
 
 func TestRTUTransportReadRTUFrame(t *testing.T) {
@@ -80,8 +78,8 @@ func TestRTUTransportReadRTUFrame(t *testing.T) {
 	if err != nil {
 		t.Errorf("readRTUFrame() should have succeeded, got %v", err)
 	}
-	if res.unitId != 0x31 {
-		t.Errorf("expected 0x31 as unit id, got 0x%02x", res.unitId)
+	if res.unitID != 0x31 {
+		t.Errorf("expected 0x31 as unit id, got 0x%02x", res.unitID)
 	}
 	if res.functionCode != 0x82 {
 		t.Errorf("expected 0x82 as function code, got 0x%02x", res.functionCode)
@@ -100,7 +98,7 @@ func TestRTUTransportReadRTUFrame(t *testing.T) {
 		0x12,       // exception code
 		0xc0, 0xa2, // CRC
 	}
-	res, err = rt.readRTUFrame()
+	_, err = rt.readRTUFrame()
 	if err != ErrBadCRC {
 		t.Errorf("readRTUFrame() should have returned ErrBadCrc, got %v", err)
 	}
@@ -117,8 +115,8 @@ func TestRTUTransportReadRTUFrame(t *testing.T) {
 	if err != nil {
 		t.Errorf("readRTUFrame() should have succeeded, got %v", err)
 	}
-	if res.unitId != 0x31 {
-		t.Errorf("expected 0x31 as unit id, got 0x%02x", res.unitId)
+	if res.unitID != 0x31 {
+		t.Errorf("expected 0x31 as unit id, got 0x%02x", res.unitID)
 	}
 	if res.functionCode != 0x03 {
 		t.Errorf("expected 0x03 as function code, got 0x%02x", res.functionCode)
@@ -139,8 +137,6 @@ func TestRTUTransportReadRTUFrame(t *testing.T) {
 
 	p1.Close()
 	p2.Close()
-
-	return
 }
 
 func feedTestPipe(t *testing.T, in chan []byte, out io.WriteCloser) {
@@ -158,8 +154,6 @@ func feedTestPipe(t *testing.T, in chan []byte, out io.WriteCloser) {
 			return
 		}
 	}
-
-	return
 }
 
 func TestModbusRTUSerialCharTime(t *testing.T) {
@@ -182,6 +176,4 @@ func TestModbusRTUSerialCharTime(t *testing.T) {
 	if d != time.Duration(1145833)*time.Nanosecond {
 		t.Errorf("unexpected serial char duration: %v", d)
 	}
-
-	return
 }
