@@ -10,6 +10,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"go.bug.st/serial"
 )
 
 type RegType uint
@@ -17,10 +19,6 @@ type Endianness uint
 type WordOrder uint
 
 const (
-	PARITY_NONE uint = 0
-	PARITY_EVEN uint = 1
-	PARITY_ODD  uint = 2
-
 	HOLDING_REGISTER RegType = 0
 	INPUT_REGISTER   RegType = 1
 
@@ -39,13 +37,13 @@ type ClientConfiguration struct {
 	// <mode>://<serial device or host:port> e.g. tcp://plc:502
 	URL string
 	// Speed sets the serial link speed (in bps, rtu only)
-	Speed uint
+	Speed int
 	// DataBits sets the number of bits per serial character (rtu only)
-	DataBits uint
+	DataBits int
 	// Parity sets the serial link parity mode (rtu only)
-	Parity uint
+	Parity serial.Parity
 	// StopBits sets the number of serial stop bits (rtu only)
-	StopBits uint
+	StopBits serial.StopBits
 	// Timeout sets the request timeout value
 	Timeout time.Duration
 	// TLSClientCert sets the client-side TLS key pair (tcp+tls only)
@@ -106,12 +104,10 @@ func NewClient(conf *ClientConfiguration) (mc *ModbusClient, err error) {
 			mc.conf.DataBits = 8
 		}
 
-		if mc.conf.StopBits == 0 {
-			if mc.conf.Parity == PARITY_NONE {
-				mc.conf.StopBits = 2
-			} else {
-				mc.conf.StopBits = 1
-			}
+		if mc.conf.Parity == serial.NoParity {
+			mc.conf.StopBits = serial.TwoStopBits
+		} else {
+			mc.conf.StopBits = serial.OneStopBit
 		}
 
 		if mc.conf.Timeout == 0 {
@@ -594,21 +590,31 @@ func (mc *ModbusClient) WriteCoil(addr uint16, value bool) (err error) {
 	// validate the response code
 	switch {
 	case res.functionCode == req.functionCode:
-		// expect 4 bytes (2 byte of address + 2 bytes of value)
-		if len(res.payload) != 4 ||
-			// bytes 1-2 should be the coil address
-			bytesToUint16(BIG_ENDIAN, res.payload[0:2]) != addr ||
-			// bytes 3-4 should either be {0xff, 0x00} or {0x00, 0x00}
-			// depending on the coil value
-			(value == true && res.payload[2] != 0xff) ||
-			res.payload[3] != 0x00 {
+		if len(res.payload) != 4 {
 			err = ErrProtocolError
+			mc.logger.Warningf("the length of the payload is not 4 but %d", len(res.payload))
+			return
+		}
+		if bytesToUint16(BIG_ENDIAN, res.payload[0:2]) != addr {
+			err = ErrProtocolError
+			mc.logger.Warningf("bytes 1-2 are not the expected coil address %d, but %d", addr, bytesToUint16(BIG_ENDIAN, res.payload[0:2]))
+			return
+		}
+		if value && (res.payload[2] != 0xff || res.payload[3] != 0x00) {
+			err = ErrProtocolError
+			mc.logger.Warningf("expected % x but got % x", []byte{0xff, 0x00}, res.payload[2:4])
+			return
+		}
+		if !value && (res.payload[2] != 0x00 || res.payload[3] != 0x00) {
+			err = ErrProtocolError
+			mc.logger.Warningf("expected % x but got % x", []byte{0x00, 0x00}, res.payload[2:4])
 			return
 		}
 
 	case res.functionCode == (req.functionCode | 0x80):
 		if len(res.payload) != 1 {
 			err = ErrProtocolError
+			mc.logger.Warningf("expected the length of the payload to be 1, but the length is %d", len(res.payload))
 			return
 		}
 
@@ -677,19 +683,26 @@ func (mc *ModbusClient) WriteCoils(addr uint16, values []bool) (err error) {
 	// validate the response code
 	switch {
 	case res.functionCode == req.functionCode:
-		// expect 4 bytes (2 byte of address + 2 bytes of quantity)
-		if len(res.payload) != 4 ||
-			// bytes 1-2 should be the base coil address
-			bytesToUint16(BIG_ENDIAN, res.payload[0:2]) != addr ||
-			// bytes 3-4 should be the quantity of coils
-			bytesToUint16(BIG_ENDIAN, res.payload[2:4]) != quantity {
+		if len(res.payload) != 4 {
 			err = ErrProtocolError
+			mc.logger.Warningf("the length of the payload is not 4 but %d", len(res.payload))
+			return
+		}
+		if bytesToUint16(BIG_ENDIAN, res.payload[0:2]) != addr {
+			err = ErrProtocolError
+			mc.logger.Warningf("bytes 1-2 are not the expected coil address %d, but %d", addr, bytesToUint16(BIG_ENDIAN, res.payload[0:2]))
+			return
+		}
+		if bytesToUint16(BIG_ENDIAN, res.payload[2:4]) != quantity {
+			err = ErrProtocolError
+			mc.logger.Warningf("bytes 3-4 are not the expected quantity of coils %d, but %d", quantity, bytesToUint16(BIG_ENDIAN, res.payload[2:4]))
 			return
 		}
 
 	case res.functionCode == (req.functionCode | 0x80):
 		if len(res.payload) != 1 {
 			err = ErrProtocolError
+			mc.logger.Warningf("expected the length of the payload to be 1, but the length is %d", len(res.payload))
 			return
 		}
 
@@ -731,19 +744,26 @@ func (mc *ModbusClient) WriteRegister(addr uint16, value uint16) (err error) {
 	// validate the response code
 	switch {
 	case res.functionCode == req.functionCode:
-		// expect 4 bytes (2 byte of address + 2 bytes of value)
-		if len(res.payload) != 4 ||
-			// bytes 1-2 should be the register address
-			bytesToUint16(BIG_ENDIAN, res.payload[0:2]) != addr ||
-			// bytes 3-4 should be the value
-			bytesToUint16(mc.endianness, res.payload[2:4]) != value {
+		if len(res.payload) != 4 {
 			err = ErrProtocolError
+			mc.logger.Warningf("the length of the payload is not 4 but %d", len(res.payload))
+			return
+		}
+		if bytesToUint16(BIG_ENDIAN, res.payload[0:2]) != addr {
+			err = ErrProtocolError
+			mc.logger.Warningf("bytes 1-2 are not the expected coil address %d, but %d", addr, bytesToUint16(BIG_ENDIAN, res.payload[0:2]))
+			return
+		}
+		if bytesToUint16(mc.endianness, res.payload[2:4]) != value {
+			err = ErrProtocolError
+			mc.logger.Warningf("bytes 3-4 are not the expected value %d, but %d", value, bytesToUint16(mc.endianness, res.payload[2:4]))
 			return
 		}
 
 	case res.functionCode == (req.functionCode | 0x80):
 		if len(res.payload) != 1 {
 			err = ErrProtocolError
+			mc.logger.Warningf("expected the length of the payload to be 1, but the length is %d", len(res.payload))
 			return
 		}
 
@@ -986,12 +1006,14 @@ func (mc *ModbusClient) readBools(addr uint16, quantity uint16, di bool) (values
 
 		if len(res.payload) != expectedLen {
 			err = ErrProtocolError
+			mc.logger.Warningf("expected the length of the payload to be %d, but the length is %d", expectedLen, len(res.payload))
 			return
 		}
 
 		// validate the byte count field
 		if int(res.payload[0])+1 != expectedLen {
 			err = ErrProtocolError
+			mc.logger.Warningf("expected %d in the byte count field, but got %d", expectedLen, int(res.payload[0])+1)
 			return
 		}
 
@@ -1001,6 +1023,7 @@ func (mc *ModbusClient) readBools(addr uint16, quantity uint16, di bool) (values
 	case res.functionCode == (req.functionCode | 0x80):
 		if len(res.payload) != 1 {
 			err = ErrProtocolError
+			mc.logger.Warningf("expected the length of the payload to be 1, but the length is %d", len(res.payload))
 			return
 		}
 
@@ -1074,6 +1097,7 @@ func (mc *ModbusClient) readRegisters(addr uint16, quantity uint16, regType RegT
 		// (1 byte of length + 2 bytes per register)
 		if len(res.payload) != 1+2*int(quantity) {
 			err = ErrProtocolError
+			mc.logger.Warningf("expected the length of the payload to be %d, but the length is %d", 1+2*int(quantity), len(res.payload))
 			return
 		}
 
@@ -1081,6 +1105,7 @@ func (mc *ModbusClient) readRegisters(addr uint16, quantity uint16, regType RegT
 		// (2 bytes per register * number of registers)
 		if uint(res.payload[0]) != 2*uint(quantity) {
 			err = ErrProtocolError
+			mc.logger.Warningf("expected %d in the byte count field, but got %d", 2*uint(quantity), int(res.payload[0]))
 			return
 		}
 
@@ -1090,13 +1115,29 @@ func (mc *ModbusClient) readRegisters(addr uint16, quantity uint16, regType RegT
 	case res.functionCode == (req.functionCode | 0x80):
 		if len(res.payload) != 1 {
 			err = ErrProtocolError
+			mc.logger.Warningf("expected the length of the payload to be 1, but the length is %d", len(res.payload))
 			return
 		}
 
 		err = mapExceptionCodeToError(res.payload[0])
 
 	default:
-		err = ErrProtocolError
+		if len(res.payload) != 4 {
+			err = ErrProtocolError
+			mc.logger.Warningf("the length of the payload is not 4 but %d", len(res.payload))
+			return
+		}
+		if bytesToUint16(BIG_ENDIAN, res.payload[0:2]) != addr {
+			err = ErrProtocolError
+			mc.logger.Warningf("bytes 1-2 are not the expected coil address %d, but %d", addr, bytesToUint16(BIG_ENDIAN, res.payload[0:2]))
+			return
+		}
+		if bytesToUint16(BIG_ENDIAN, res.payload[2:4]) != quantity {
+			err = ErrProtocolError
+			mc.logger.Warningf("bytes 3-4 are not the expected quantity of coils %d, but %d", quantity, bytesToUint16(BIG_ENDIAN, res.payload[2:4]))
+			return
+		}
+
 		mc.logger.Warningf("unexpected response code (%v)", res.functionCode)
 	}
 
@@ -1159,19 +1200,26 @@ func (mc *ModbusClient) writeRegisters(addr uint16, values []byte) (err error) {
 	// validate the response code
 	switch {
 	case res.functionCode == req.functionCode:
-		// expect 4 bytes (2 byte of address + 2 bytes of quantity)
-		if len(res.payload) != 4 ||
-			// bytes 1-2 should be the base register address
-			bytesToUint16(BIG_ENDIAN, res.payload[0:2]) != addr ||
-			// bytes 3-4 should be the quantity of registers (2 bytes per register)
-			bytesToUint16(BIG_ENDIAN, res.payload[2:4]) != quantity {
+		if len(res.payload) != 4 {
 			err = ErrProtocolError
+			mc.logger.Warningf("the length of the payload is not 4 but %d", len(res.payload))
+			return
+		}
+		if bytesToUint16(BIG_ENDIAN, res.payload[0:2]) != addr {
+			err = ErrProtocolError
+			mc.logger.Warningf("bytes 1-2 are not the expected coil address %d, but %d", addr, bytesToUint16(BIG_ENDIAN, res.payload[0:2]))
+			return
+		}
+		if bytesToUint16(BIG_ENDIAN, res.payload[2:4]) != quantity {
+			err = ErrProtocolError
+			mc.logger.Warningf("bytes 3-4 are not the expected value %d, but %d", quantity, bytesToUint16(mc.endianness, res.payload[2:4]))
 			return
 		}
 
 	case res.functionCode == (req.functionCode | 0x80):
 		if len(res.payload) != 1 {
 			err = ErrProtocolError
+			mc.logger.Warningf("expected the length of the payload to be 1, but the length is %d", len(res.payload))
 			return
 		}
 

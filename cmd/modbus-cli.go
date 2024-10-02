@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/simonvetter/modbus"
+	"go.bug.st/serial"
 )
 
 func main() {
@@ -24,10 +25,10 @@ func main() {
 	var certPath string // path to TLS client certificate
 	var keyPath string  // path to TLS client key
 	var clientKeyPair tls.Certificate
-	var speed uint
-	var dataBits uint
+	var speed int
+	var dataBits int
 	var parity string
-	var stopBits uint
+	var stopBits string
 	var endianness string
 	var wordOrder string
 	var timeout string
@@ -37,10 +38,10 @@ func main() {
 	var runList []operation
 
 	flag.StringVar(&target, "target", "", "target device to connect to (e.g. tcp://somehost:502) [required]")
-	flag.UintVar(&speed, "speed", 19200, "serial bus speed in bps (rtu)")
-	flag.UintVar(&dataBits, "data-bits", 8, "number of bits per character on the serial bus (rtu)")
+	flag.IntVar(&speed, "speed", 19200, "serial bus speed in bps (rtu)")
+	flag.IntVar(&dataBits, "data-bits", 8, "number of bits per character on the serial bus (rtu)")
 	flag.StringVar(&parity, "parity", "none", "parity bit <none|even|odd> on the serial bus (rtu)")
-	flag.UintVar(&stopBits, "stop-bits", 2, "number of stop bits <0|1|2>) on the serial bus (rtu)")
+	flag.StringVar(&stopBits, "stop-bits", "2", "number of stop bits <0|1|1.5|2>) on the serial bus (rtu)")
 	flag.StringVar(&timeout, "timeout", "3s", "timeout value")
 	flag.StringVar(&endianness, "endianness", "big", "register endianness <little|big>")
 	flag.StringVar(&wordOrder, "word-order", "highfirst", "word ordering for 32-bit registers <highfirst|hf|lowfirst|lf>")
@@ -66,19 +67,30 @@ func main() {
 		URL:      target,
 		Speed:    speed,
 		DataBits: dataBits,
-		StopBits: stopBits,
 	}
 
 	switch parity {
 	case "none":
-		config.Parity = modbus.PARITY_NONE
+		config.Parity = serial.NoParity
 	case "odd":
-		config.Parity = modbus.PARITY_ODD
+		config.Parity = serial.OddParity
 	case "even":
-		config.Parity = modbus.PARITY_EVEN
+		config.Parity = serial.EvenParity
 	default:
 		fmt.Printf("unknown parity setting '%s' (should be one of none, odd or even)\n",
 			parity)
+		os.Exit(1)
+	}
+	switch stopBits {
+	case "1":
+		config.StopBits = serial.OneStopBit
+	case "1.5":
+		config.StopBits = serial.OnePointFiveStopBits
+	case "2":
+		config.StopBits = serial.TwoStopBits
+	default:
+		fmt.Printf("unknown stop-bits setting '%s' (should be one of 1, 1.5 or 2)\n",
+			stopBits)
 		os.Exit(1)
 	}
 

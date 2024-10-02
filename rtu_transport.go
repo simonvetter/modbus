@@ -28,7 +28,7 @@ type rtuLink interface {
 }
 
 // Returns a new RTU transport.
-func newRTUTransport(link rtuLink, addr string, speed uint, timeout time.Duration, customLogger *log.Logger) (rt *rtuTransport) {
+func newRTUTransport(link rtuLink, addr string, speed int, timeout time.Duration, customLogger *log.Logger) (rt *rtuTransport) {
 	rt = &rtuTransport{
 		logger:  newLogger(fmt.Sprintf("rtu-transport(%s)", addr), customLogger),
 		link:    link,
@@ -95,6 +95,7 @@ func (rt *rtuTransport) ExecuteRequest(req *pdu) (res *pdu, err error) {
 	res, err = rt.readRTUFrame()
 
 	if err == ErrBadCRC || err == ErrProtocolError || err == ErrShortFrame {
+		rt.logger.Warningf("got an error while reading the RTU frame %v", err)
 		// wait for and flush any data coming off the link to allow
 		// devices to re-sync
 		time.Sleep(time.Duration(maxRTUFrameLength) * rt.t1)
@@ -154,7 +155,7 @@ func (rt *rtuTransport) readRTUFrame() (res *pdu, err error) {
 	}
 
 	// figure out how many further bytes to read
-	bytesNeeded, err = expectedResponseLenth(uint8(rxbuf[1]), uint8(rxbuf[2]))
+	bytesNeeded, err = expectedResponseLength(uint8(rxbuf[1]), uint8(rxbuf[2]))
 	if err != nil {
 		return
 	}
@@ -165,6 +166,7 @@ func (rt *rtuTransport) readRTUFrame() (res *pdu, err error) {
 	// never read more than the max allowed frame length
 	if byteCount+bytesNeeded > maxRTUFrameLength {
 		err = ErrProtocolError
+		rt.logger.Warningf("tried to read %d bytes, this is more than the maximum RTU frame length %d", byteCount+bytesNeeded, maxRTUFrameLength)
 		return
 	}
 
@@ -173,8 +175,8 @@ func (rt *rtuTransport) readRTUFrame() (res *pdu, err error) {
 		return
 	}
 	if byteCount != bytesNeeded {
-		rt.logger.Warningf("expected %v bytes, received %v", bytesNeeded, byteCount)
 		err = ErrShortFrame
+		rt.logger.Warningf("expected %v bytes, received %v", bytesNeeded, byteCount)
 		return
 	}
 
@@ -217,7 +219,7 @@ func (rt *rtuTransport) assembleRTUFrame(p *pdu) (adu []byte) {
 }
 
 // Computes the expected length of a modbus RTU response.
-func expectedResponseLenth(responseCode uint8, responseLength uint8) (byteCount int, err error) {
+func expectedResponseLength(responseCode uint8, responseLength uint8) (byteCount int, err error) {
 	switch responseCode {
 	case fcReadHoldingRegisters,
 		fcReadInputRegisters,
@@ -262,7 +264,7 @@ func discard(link rtuLink) {
 
 // Returns how long it takes to send 1 byte on a serial line at the
 // specified baud rate.
-func serialCharTime(rate_bps uint) (ct time.Duration) {
+func serialCharTime(rate_bps int) (ct time.Duration) {
 	// note: an RTU byte on the wire is:
 	// - 1 start bit,
 	// - 8 data bits,

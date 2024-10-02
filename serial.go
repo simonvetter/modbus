@@ -3,7 +3,7 @@ package modbus
 import (
 	"time"
 
-	"github.com/goburrow/serial"
+	"go.bug.st/serial"
 )
 
 // serialPortWrapper wraps a serial.Port (i.e. physical port) to
@@ -17,10 +17,10 @@ type serialPortWrapper struct {
 
 type serialPortConfig struct {
 	Device   string
-	Speed    uint
-	DataBits uint
-	Parity   uint
-	StopBits uint
+	Speed    int
+	DataBits int
+	Parity   serial.Parity
+	StopBits serial.StopBits
 }
 
 func newSerialPortWrapper(conf *serialPortConfig) (spw *serialPortWrapper) {
@@ -32,24 +32,11 @@ func newSerialPortWrapper(conf *serialPortConfig) (spw *serialPortWrapper) {
 }
 
 func (spw *serialPortWrapper) Open() (err error) {
-	var parity string
-
-	switch spw.conf.Parity {
-	case PARITY_NONE:
-		parity = "N"
-	case PARITY_EVEN:
-		parity = "E"
-	case PARITY_ODD:
-		parity = "O"
-	}
-
-	spw.port, err = serial.Open(&serial.Config{
-		Address:  spw.conf.Device,
-		BaudRate: int(spw.conf.Speed),
-		DataBits: int(spw.conf.DataBits),
-		Parity:   parity,
-		StopBits: int(spw.conf.StopBits),
-		Timeout:  10 * time.Millisecond,
+	spw.port, err = serial.Open(spw.conf.Device, &serial.Mode{
+		BaudRate: spw.conf.Speed,
+		DataBits: spw.conf.DataBits,
+		Parity:   spw.conf.Parity,
+		StopBits: spw.conf.StopBits,
 	})
 
 	return
@@ -85,7 +72,7 @@ func (spw *serialPortWrapper) Read(rxbuf []byte) (cnt int, err error) {
 
 	cnt, err = spw.port.Read(rxbuf)
 	// mask serial.ErrTimeout errors from the serial port
-	if err != nil && err == serial.ErrTimeout {
+	if err != nil {
 		err = nil
 	}
 

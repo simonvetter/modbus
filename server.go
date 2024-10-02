@@ -320,9 +320,6 @@ func (ms *ModbusServer) acceptTCPClients() {
 			sock.Close()
 		}
 	}
-
-	// never reached
-	return
 }
 
 // Handles a TCP client connection.
