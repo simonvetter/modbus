@@ -74,7 +74,6 @@ type Client struct {
 	endianness    Endianness
 	wordOrder     WordOrder
 	transport     transport
-	unitID        uint8
 	transportType transportType
 }
 
@@ -195,7 +194,6 @@ func NewClient(conf *Configuration) (mc *Client, err error) {
 		return
 	}
 
-	mc.unitID = 1
 	mc.endianness = BigEndian
 	mc.wordOrder = HighWordFirst
 
@@ -204,11 +202,16 @@ func NewClient(conf *Configuration) (mc *Client, err error) {
 
 // Open opens the underlying transport (network socket or serial line).
 func (mc *Client) Open() (err error) {
-	var spw *serialPortWrapper
-	var sock net.Conn
-
 	mc.lock.Lock()
 	defer mc.lock.Unlock()
+
+	var spw *serialPortWrapper
+	var sw *socketWrapper
+	var sock net.Conn
+
+	if mc.transport != nil {
+		return ErrTransportIsAlreadyOpen
+	}
 
 	switch mc.transportType {
 	case modbusRTU:
@@ -228,7 +231,10 @@ func (mc *Client) Open() (err error) {
 		}
 
 		// discard potentially stale serial data
-		discard(spw)
+		err = spw.Reset()
+		if err != nil {
+			return err
+		}
 
 		// create the RTU transport
 		mc.transport = newRTUTransport(
@@ -241,12 +247,13 @@ func (mc *Client) Open() (err error) {
 			return
 		}
 
-		// discard potentially stale serial data
-		discard(sock)
+		sw = newSocketWrapper(sock)
+		// discard potentially stale data
+		sw.Reset()
 
 		// create the RTU transport
 		mc.transport = newRTUTransport(
-			sock, mc.conf.URL, mc.conf.Speed, mc.conf.Timeout, mc.conf.Logger)
+			sw, mc.conf.URL, mc.conf.Speed, mc.conf.Timeout, mc.conf.Logger)
 
 	case modbusRTUOverUDP:
 		// open a socket to the remote host (note: no actual connection is
@@ -327,25 +334,21 @@ func (mc *Client) Open() (err error) {
 }
 
 // Close closes the underlying transport.
-func (mc *Client) Close() (err error) {
+func (mc *Client) Close() error {
 	mc.lock.Lock()
 	defer mc.lock.Unlock()
 
-	if mc.transport != nil {
-		err = mc.transport.Close()
+	if mc.transport == nil {
+		return ErrTransportIsAlreadyClosed
 	}
 
-	return
-}
+	err := mc.transport.Close()
+	if err != nil {
+		return err
+	}
 
-// SetUnitID sets the unit id (or slave id) of subsequent requests.
-func (mc *Client) SetUnitID(id uint8) (err error) {
-	mc.lock.Lock()
-	defer mc.lock.Unlock()
-
-	mc.unitID = id
-
-	return
+	mc.transport = nil
+	return nil
 }
 
 // SetEncoding sets the encoding (endianness and word ordering) of subsequent requests.
@@ -372,17 +375,17 @@ func (mc *Client) SetEncoding(endianness Endianness, wordOrder WordOrder) (err e
 }
 
 // ReadCoils reads multiple coils (function code 01).
-func (mc *Client) ReadCoils(addr uint16, quantity uint16) (values []bool, err error) {
-	values, err = mc.readBools(addr, quantity, false)
+func (mc *Client) ReadCoils(unitID uint8, addr uint16, quantity uint16) (values []bool, err error) {
+	values, err = mc.readBools(unitID, addr, quantity, false)
 
 	return
 }
 
 // ReadCoil reads a single coil (function code 01).
-func (mc *Client) ReadCoil(addr uint16) (value bool, err error) {
+func (mc *Client) ReadCoil(unitID uint8, addr uint16) (value bool, err error) {
 	var values []bool
 
-	values, err = mc.readBools(addr, 1, false)
+	values, err = mc.readBools(unitID, addr, 1, false)
 	if err == nil {
 		value = values[0]
 	}
@@ -391,17 +394,17 @@ func (mc *Client) ReadCoil(addr uint16) (value bool, err error) {
 }
 
 // ReadDiscreteInputs reads multiple discrete inputs (function code 02).
-func (mc *Client) ReadDiscreteInputs(addr uint16, quantity uint16) (values []bool, err error) {
-	values, err = mc.readBools(addr, quantity, true)
+func (mc *Client) ReadDiscreteInputs(unitID uint8, addr uint16, quantity uint16) (values []bool, err error) {
+	values, err = mc.readBools(unitID, addr, quantity, true)
 
 	return
 }
 
 // ReadDiscreteInput reads a single discrete input (function code 02).
-func (mc *Client) ReadDiscreteInput(addr uint16) (value bool, err error) {
+func (mc *Client) ReadDiscreteInput(unitID uint8, addr uint16) (value bool, err error) {
 	var values []bool
 
-	values, err = mc.readBools(addr, 1, true)
+	values, err = mc.readBools(unitID, addr, 1, true)
 	if err == nil {
 		value = values[0]
 	}
@@ -410,11 +413,11 @@ func (mc *Client) ReadDiscreteInput(addr uint16) (value bool, err error) {
 }
 
 // ReadRegisters reads multiple 16-bit registers (function code 03 or 04).
-func (mc *Client) ReadRegisters(addr uint16, quantity uint16, regType RegisterType) (values []uint16, err error) {
+func (mc *Client) ReadRegisters(unitID uint8, addr uint16, quantity uint16, regType RegisterType) (values []uint16, err error) {
 	var mbPayload []byte
 
 	// read quantity uint16 registers, as bytes
-	mbPayload, err = mc.readRegisters(addr, quantity, regType)
+	mbPayload, err = mc.readRegisters(unitID, addr, quantity, regType)
 	if err != nil {
 		return
 	}
@@ -426,11 +429,11 @@ func (mc *Client) ReadRegisters(addr uint16, quantity uint16, regType RegisterTy
 }
 
 // ReadRegister reads a single 16-bit register (function code 03 or 04).
-func (mc *Client) ReadRegister(addr uint16, regType RegisterType) (value uint16, err error) {
+func (mc *Client) ReadRegister(unitID uint8, addr uint16, regType RegisterType) (value uint16, err error) {
 	var values []uint16
 
 	// read 1 uint16 register, as bytes
-	values, err = mc.ReadRegisters(addr, 1, regType)
+	values, err = mc.ReadRegisters(unitID, addr, 1, regType)
 	if err == nil {
 		value = values[0]
 	}
@@ -439,11 +442,11 @@ func (mc *Client) ReadRegister(addr uint16, regType RegisterType) (value uint16,
 }
 
 // ReadUint32s reads multiple 32-bit registers.
-func (mc *Client) ReadUint32s(addr uint16, quantity uint16, regType RegisterType) (values []uint32, err error) {
+func (mc *Client) ReadUint32s(unitID uint8, addr uint16, quantity uint16, regType RegisterType) (values []uint32, err error) {
 	var mbPayload []byte
 
 	// read 2 * quantity uint16 registers, as bytes
-	mbPayload, err = mc.readRegisters(addr, quantity*2, regType)
+	mbPayload, err = mc.readRegisters(unitID, addr, quantity*2, regType)
 	if err != nil {
 		return
 	}
@@ -455,10 +458,10 @@ func (mc *Client) ReadUint32s(addr uint16, quantity uint16, regType RegisterType
 }
 
 // ReadUint32 reads a single 32-bit register.
-func (mc *Client) ReadUint32(addr uint16, regType RegisterType) (value uint32, err error) {
+func (mc *Client) ReadUint32(unitID uint8, addr uint16, regType RegisterType) (value uint32, err error) {
 	var values []uint32
 
-	values, err = mc.ReadUint32s(addr, 1, regType)
+	values, err = mc.ReadUint32s(unitID, addr, 1, regType)
 	if err == nil {
 		value = values[0]
 	}
@@ -467,11 +470,11 @@ func (mc *Client) ReadUint32(addr uint16, regType RegisterType) (value uint32, e
 }
 
 // ReadFloat32s reads multiple 32-bit float registers.
-func (mc *Client) ReadFloat32s(addr uint16, quantity uint16, regType RegisterType) (values []float32, err error) {
+func (mc *Client) ReadFloat32s(unitID uint8, addr uint16, quantity uint16, regType RegisterType) (values []float32, err error) {
 	var mbPayload []byte
 
 	// read 2 * quantity uint16 registers, as bytes
-	mbPayload, err = mc.readRegisters(addr, quantity*2, regType)
+	mbPayload, err = mc.readRegisters(unitID, addr, quantity*2, regType)
 	if err != nil {
 		return
 	}
@@ -483,10 +486,10 @@ func (mc *Client) ReadFloat32s(addr uint16, quantity uint16, regType RegisterTyp
 }
 
 // ReadFloat32 reads a single 32-bit float register.
-func (mc *Client) ReadFloat32(addr uint16, regType RegisterType) (value float32, err error) {
+func (mc *Client) ReadFloat32(unitID uint8, addr uint16, regType RegisterType) (value float32, err error) {
 	var values []float32
 
-	values, err = mc.ReadFloat32s(addr, 1, regType)
+	values, err = mc.ReadFloat32s(unitID, addr, 1, regType)
 	if err == nil {
 		value = values[0]
 	}
@@ -495,11 +498,11 @@ func (mc *Client) ReadFloat32(addr uint16, regType RegisterType) (value float32,
 }
 
 // ReadUint64s reads multiple 64-bit registers.
-func (mc *Client) ReadUint64s(addr uint16, quantity uint16, regType RegisterType) (values []uint64, err error) {
+func (mc *Client) ReadUint64s(unitID uint8, addr uint16, quantity uint16, regType RegisterType) (values []uint64, err error) {
 	var mbPayload []byte
 
 	// read 4 * quantity uint16 registers, as bytes
-	mbPayload, err = mc.readRegisters(addr, quantity*4, regType)
+	mbPayload, err = mc.readRegisters(unitID, addr, quantity*4, regType)
 	if err != nil {
 		return
 	}
@@ -511,10 +514,10 @@ func (mc *Client) ReadUint64s(addr uint16, quantity uint16, regType RegisterType
 }
 
 // ReadUint64 reads a single 64-bit register.
-func (mc *Client) ReadUint64(addr uint16, regType RegisterType) (value uint64, err error) {
+func (mc *Client) ReadUint64(unitID uint8, addr uint16, regType RegisterType) (value uint64, err error) {
 	var values []uint64
 
-	values, err = mc.ReadUint64s(addr, 1, regType)
+	values, err = mc.ReadUint64s(unitID, addr, 1, regType)
 	if err == nil {
 		value = values[0]
 	}
@@ -523,11 +526,11 @@ func (mc *Client) ReadUint64(addr uint16, regType RegisterType) (value uint64, e
 }
 
 // ReadFloat64s reads multiple 64-bit float registers.
-func (mc *Client) ReadFloat64s(addr uint16, quantity uint16, regType RegisterType) (values []float64, err error) {
+func (mc *Client) ReadFloat64s(unitID uint8, addr uint16, quantity uint16, regType RegisterType) (values []float64, err error) {
 	var mbPayload []byte
 
 	// read 4 * quantity uint16 registers, as bytes
-	mbPayload, err = mc.readRegisters(addr, quantity*4, regType)
+	mbPayload, err = mc.readRegisters(unitID, addr, quantity*4, regType)
 	if err != nil {
 		return
 	}
@@ -539,10 +542,10 @@ func (mc *Client) ReadFloat64s(addr uint16, quantity uint16, regType RegisterTyp
 }
 
 // ReadFloat64 reads a single 64-bit float register.
-func (mc *Client) ReadFloat64(addr uint16, regType RegisterType) (value float64, err error) {
+func (mc *Client) ReadFloat64(unitID uint8, addr uint16, regType RegisterType) (value float64, err error) {
 	var values []float64
 
-	values, err = mc.ReadFloat64s(addr, 1, regType)
+	values, err = mc.ReadFloat64s(unitID, addr, 1, regType)
 	if err == nil {
 		value = values[0]
 	}
@@ -552,8 +555,8 @@ func (mc *Client) ReadFloat64(addr uint16, regType RegisterType) (value float64,
 
 // ReadBytes reads one or multiple 16-bit registers (function code 03 or 04) as bytes.
 // A per-register byteswap is performed if endianness is set to LittleEndian.
-func (mc *Client) ReadBytes(addr uint16, quantity uint16, regType RegisterType) (values []byte, err error) {
-	values, err = mc.readBytes(addr, quantity, regType, true)
+func (mc *Client) ReadBytes(unitID uint8, addr uint16, quantity uint16, regType RegisterType) (values []byte, err error) {
+	values, err = mc.readBytes(unitID, addr, quantity, regType, true)
 
 	return
 }
@@ -561,14 +564,14 @@ func (mc *Client) ReadBytes(addr uint16, quantity uint16, regType RegisterType) 
 // ReadRawBytes reads one or multiple 16-bit registers (function code 03 or 04) as bytes.
 // No byte or word reordering is performed: bytes are returned exactly as they come
 // off the wire, allowing the caller to handle encoding/endianness/word order manually.
-func (mc *Client) ReadRawBytes(addr uint16, quantity uint16, regType RegisterType) (values []byte, err error) {
-	values, err = mc.readBytes(addr, quantity, regType, false)
+func (mc *Client) ReadRawBytes(unitID uint8, addr uint16, quantity uint16, regType RegisterType) (values []byte, err error) {
+	values, err = mc.readBytes(unitID, addr, quantity, regType, false)
 
 	return
 }
 
 // WriteCoil writes a single coil (function code 05).
-func (mc *Client) WriteCoil(addr uint16, value bool) (err error) {
+func (mc *Client) WriteCoil(unitID uint8, addr uint16, value bool) (err error) {
 	var req *pdu
 	var res *pdu
 
@@ -577,7 +580,7 @@ func (mc *Client) WriteCoil(addr uint16, value bool) (err error) {
 
 	// create and fill in the request object
 	req = &pdu{
-		unitID:       mc.unitID,
+		unitID:       unitID,
 		functionCode: fcWriteSingleCoil,
 	}
 
@@ -638,7 +641,7 @@ func (mc *Client) WriteCoil(addr uint16, value bool) (err error) {
 }
 
 // WriteCoils writes multiple coils (function code 15).
-func (mc *Client) WriteCoils(addr uint16, values []bool) (err error) {
+func (mc *Client) WriteCoils(unitID uint8, addr uint16, values []bool) (err error) {
 	var req *pdu
 	var res *pdu
 	var quantity uint16
@@ -670,7 +673,7 @@ func (mc *Client) WriteCoils(addr uint16, values []bool) (err error) {
 
 	// create and fill in the request object
 	req = &pdu{
-		unitID:       mc.unitID,
+		unitID:       unitID,
 		functionCode: fcWriteMultipleCoils,
 	}
 
@@ -726,7 +729,7 @@ func (mc *Client) WriteCoils(addr uint16, values []bool) (err error) {
 }
 
 // WriteRegister writes a single 16-bit register (function code 06).
-func (mc *Client) WriteRegister(addr uint16, value uint16) (err error) {
+func (mc *Client) WriteRegister(unitID uint8, addr uint16, value uint16) (err error) {
 	var req *pdu
 	var res *pdu
 
@@ -735,7 +738,7 @@ func (mc *Client) WriteRegister(addr uint16, value uint16) (err error) {
 
 	// create and fill in the request object
 	req = &pdu{
-		unitID:       mc.unitID,
+		unitID:       unitID,
 		functionCode: fcWriteSingleRegister,
 	}
 
@@ -787,7 +790,7 @@ func (mc *Client) WriteRegister(addr uint16, value uint16) (err error) {
 }
 
 // WriteRegisters writes multiple 16-bit registers (function code 16).
-func (mc *Client) WriteRegisters(addr uint16, values []uint16) (err error) {
+func (mc *Client) WriteRegisters(unitID uint8, addr uint16, values []uint16) (err error) {
 	var payload []byte
 
 	// turn registers to bytes
@@ -795,13 +798,13 @@ func (mc *Client) WriteRegisters(addr uint16, values []uint16) (err error) {
 		payload = append(payload, uint16ToBytes(mc.endianness, value)...)
 	}
 
-	err = mc.writeRegisters(addr, payload)
+	err = mc.writeRegisters(unitID, addr, payload)
 
 	return
 }
 
 // WriteUint32s writes multiple 32-bit registers.
-func (mc *Client) WriteUint32s(addr uint16, values []uint32) (err error) {
+func (mc *Client) WriteUint32s(unitID uint8, addr uint16, values []uint32) (err error) {
 	var payload []byte
 
 	// turn registers to bytes
@@ -809,20 +812,20 @@ func (mc *Client) WriteUint32s(addr uint16, values []uint32) (err error) {
 		payload = append(payload, uint32ToBytes(mc.endianness, mc.wordOrder, value)...)
 	}
 
-	err = mc.writeRegisters(addr, payload)
+	err = mc.writeRegisters(unitID, addr, payload)
 
 	return
 }
 
 // WriteUint32 writes a single 32-bit register.
-func (mc *Client) WriteUint32(addr uint16, value uint32) (err error) {
-	err = mc.writeRegisters(addr, uint32ToBytes(mc.endianness, mc.wordOrder, value))
+func (mc *Client) WriteUint32(unitID uint8, addr uint16, value uint32) (err error) {
+	err = mc.writeRegisters(unitID, addr, uint32ToBytes(mc.endianness, mc.wordOrder, value))
 
 	return
 }
 
 // WriteFloat32s writes multiple 32-bit float registers.
-func (mc *Client) WriteFloat32s(addr uint16, values []float32) (err error) {
+func (mc *Client) WriteFloat32s(unitID uint8, addr uint16, values []float32) (err error) {
 	var payload []byte
 
 	// turn registers to bytes
@@ -830,20 +833,20 @@ func (mc *Client) WriteFloat32s(addr uint16, values []float32) (err error) {
 		payload = append(payload, float32ToBytes(mc.endianness, mc.wordOrder, value)...)
 	}
 
-	err = mc.writeRegisters(addr, payload)
+	err = mc.writeRegisters(unitID, addr, payload)
 
 	return
 }
 
 // WriteFloat32 writes a single 32-bit float register.
-func (mc *Client) WriteFloat32(addr uint16, value float32) (err error) {
-	err = mc.writeRegisters(addr, float32ToBytes(mc.endianness, mc.wordOrder, value))
+func (mc *Client) WriteFloat32(unitID uint8, addr uint16, value float32) (err error) {
+	err = mc.writeRegisters(unitID, addr, float32ToBytes(mc.endianness, mc.wordOrder, value))
 
 	return
 }
 
 // WriteUint64s writes multiple 64-bit registers.
-func (mc *Client) WriteUint64s(addr uint16, values []uint64) (err error) {
+func (mc *Client) WriteUint64s(unitID uint8, addr uint16, values []uint64) (err error) {
 	var payload []byte
 
 	// turn registers to bytes
@@ -851,20 +854,20 @@ func (mc *Client) WriteUint64s(addr uint16, values []uint64) (err error) {
 		payload = append(payload, uint64ToBytes(mc.endianness, mc.wordOrder, value)...)
 	}
 
-	err = mc.writeRegisters(addr, payload)
+	err = mc.writeRegisters(unitID, addr, payload)
 
 	return
 }
 
 // WriteUint64 writes a single 64-bit register.
-func (mc *Client) WriteUint64(addr uint16, value uint64) (err error) {
-	err = mc.writeRegisters(addr, uint64ToBytes(mc.endianness, mc.wordOrder, value))
+func (mc *Client) WriteUint64(unitID uint8, addr uint16, value uint64) (err error) {
+	err = mc.writeRegisters(unitID, addr, uint64ToBytes(mc.endianness, mc.wordOrder, value))
 
 	return
 }
 
 // WriteFloat64s writes multiple 64-bit float registers.
-func (mc *Client) WriteFloat64s(addr uint16, values []float64) (err error) {
+func (mc *Client) WriteFloat64s(unitID uint8, addr uint16, values []float64) (err error) {
 	var payload []byte
 
 	// turn registers to bytes
@@ -872,14 +875,14 @@ func (mc *Client) WriteFloat64s(addr uint16, values []float64) (err error) {
 		payload = append(payload, float64ToBytes(mc.endianness, mc.wordOrder, value)...)
 	}
 
-	err = mc.writeRegisters(addr, payload)
+	err = mc.writeRegisters(unitID, addr, payload)
 
 	return
 }
 
 // WriteFloat64 writes a single 64-bit float register.
-func (mc *Client) WriteFloat64(addr uint16, value float64) (err error) {
-	err = mc.writeRegisters(addr, float64ToBytes(mc.endianness, mc.wordOrder, value))
+func (mc *Client) WriteFloat64(unitID uint8, addr uint16, value float64) (err error) {
+	err = mc.writeRegisters(unitID, addr, float64ToBytes(mc.endianness, mc.wordOrder, value))
 
 	return
 }
@@ -887,8 +890,8 @@ func (mc *Client) WriteFloat64(addr uint16, value float64) (err error) {
 // WriteBytes writes the given slice of bytes to 16-bit registers starting at addr.
 // A per-register byteswap is performed if endianness is set to LittleEndian.
 // Odd byte quantities are padded with a null byte to fall on 16-bit register boundaries.
-func (mc *Client) WriteBytes(addr uint16, values []byte) (err error) {
-	err = mc.writeBytes(addr, values, true)
+func (mc *Client) WriteBytes(unitID uint8, addr uint16, values []byte) (err error) {
+	err = mc.writeBytes(unitID, addr, values, true)
 
 	return
 }
@@ -897,19 +900,19 @@ func (mc *Client) WriteBytes(addr uint16, values []byte) (err error) {
 // No byte or word reordering is performed: bytes are pushed to the wire as-is,
 // allowing the caller to handle encoding/endianness/word order manually.
 // Odd byte quantities are padded with a null byte to fall on 16-bit register boundaries.
-func (mc *Client) WriteRawBytes(addr uint16, values []byte) (err error) {
-	err = mc.writeBytes(addr, values, false)
+func (mc *Client) WriteRawBytes(unitID uint8, addr uint16, values []byte) (err error) {
+	err = mc.writeBytes(unitID, addr, values, false)
 
 	return
 }
 
 // Reads one or multiple 16-bit registers (function code 03 or 04) as bytes.
-func (mc *Client) readBytes(addr uint16, quantity uint16, regType RegisterType, observeEndianness bool) (values []byte, err error) {
+func (mc *Client) readBytes(unitID uint8, addr uint16, quantity uint16, regType RegisterType, observeEndianness bool) (values []byte, err error) {
 	// read enough registers to get the requested number of bytes
 	// (2 bytes per reg)
 	regCount := (quantity / 2) + (quantity % 2)
 
-	values, err = mc.readRegisters(addr, regCount, regType)
+	values, err = mc.readRegisters(unitID, addr, regCount, regType)
 	if err != nil {
 		return
 	}
@@ -931,7 +934,7 @@ func (mc *Client) readBytes(addr uint16, quantity uint16, regType RegisterType, 
 }
 
 // Writes the given slice of bytes to 16-bit registers starting at addr.
-func (mc *Client) writeBytes(addr uint16, values []byte, observeEndianness bool) (err error) {
+func (mc *Client) writeBytes(unitID uint8, addr uint16, values []byte, observeEndianness bool) (err error) {
 	// pad odd quantities to make for full registers
 	if len(values)%2 == 1 {
 		values = append(values, 0x00)
@@ -945,14 +948,14 @@ func (mc *Client) writeBytes(addr uint16, values []byte, observeEndianness bool)
 		}
 	}
 
-	err = mc.writeRegisters(addr, values)
+	err = mc.writeRegisters(unitID, addr, values)
 
 	return
 }
 
 // Reads and returns quantity booleans.
 // Digital inputs are read if di is true, otherwise coils are read.
-func (mc *Client) readBools(addr uint16, quantity uint16, di bool) (values []bool, err error) {
+func (mc *Client) readBools(unitID uint8, addr uint16, quantity uint16, di bool) (values []bool, err error) {
 	var req *pdu
 	var res *pdu
 	var expectedLen int
@@ -980,7 +983,7 @@ func (mc *Client) readBools(addr uint16, quantity uint16, di bool) (values []boo
 
 	// create and fill in the request object
 	req = &pdu{
-		unitID: mc.unitID,
+		unitID: unitID,
 	}
 
 	if di {
@@ -1044,7 +1047,7 @@ func (mc *Client) readBools(addr uint16, quantity uint16, di bool) (values []boo
 }
 
 // Reads and returns quantity registers of type regType, as bytes.
-func (mc *Client) readRegisters(addr uint16, quantity uint16, regType RegisterType) (bytes []byte, err error) {
+func (mc *Client) readRegisters(unitID uint8, addr uint16, quantity uint16, regType RegisterType) (bytes []byte, err error) {
 	var req *pdu
 	var res *pdu
 
@@ -1053,7 +1056,7 @@ func (mc *Client) readRegisters(addr uint16, quantity uint16, regType RegisterTy
 
 	// create and fill in the request object
 	req = &pdu{
-		unitID: mc.unitID,
+		unitID: unitID,
 	}
 
 	switch regType {
@@ -1152,7 +1155,7 @@ func (mc *Client) readRegisters(addr uint16, quantity uint16, regType RegisterTy
 
 // Writes multiple registers starting from base address addr.
 // Register values are passed as bytes, each value being exactly 2 bytes.
-func (mc *Client) writeRegisters(addr uint16, values []byte) (err error) {
+func (mc *Client) writeRegisters(unitID uint8, addr uint16, values []byte) (err error) {
 	var req *pdu
 	var res *pdu
 	var payloadLength uint16
@@ -1184,7 +1187,7 @@ func (mc *Client) writeRegisters(addr uint16, values []byte) (err error) {
 
 	// create and fill in the request object
 	req = &pdu{
-		unitID:       mc.unitID,
+		unitID:       unitID,
 		functionCode: fcWriteMultipleRegisters,
 	}
 

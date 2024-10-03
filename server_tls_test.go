@@ -196,7 +196,7 @@ func TestTLSServer(t *testing.T) {
 	if err != nil {
 		t.Errorf("c1.Open() should have succeeded")
 	}
-	coils, err = c1.ReadCoils(0, 5)
+	coils, err = c1.ReadCoils(1, 0, 5)
 	if err == nil {
 		t.Error("c1.ReadCoils() should have failed")
 	}
@@ -224,13 +224,13 @@ func TestTLSServer(t *testing.T) {
 
 	// client #2 (with 'operator2' role) should have read/write access to coils while
 	// client #1 (without role) should only be able to read.
-	err = c1.WriteCoil(0, true)
+	err = c1.WriteCoil(1, 0, true)
 	if err != ErrIllegalFunction {
 		t.Errorf("c1.WriteCoil() should have failed with %v, got: %v",
 			ErrIllegalFunction, err)
 	}
 
-	coils, err = c1.ReadCoils(0, 5)
+	coils, err = c1.ReadCoils(1, 0, 5)
 	if err != nil {
 		t.Errorf("c1.ReadCoils() should have succeeded, got: %v", err)
 	}
@@ -238,12 +238,12 @@ func TestTLSServer(t *testing.T) {
 		t.Errorf("coils[0] should have been false")
 	}
 
-	err = c2.WriteCoil(0, true)
+	err = c2.WriteCoil(1, 0, true)
 	if err != nil {
 		t.Errorf("c2.WriteCoil() should have succeeded, got: %v", err)
 	}
 
-	coils, err = c2.ReadCoils(0, 5)
+	coils, err = c2.ReadCoils(1, 0, 5)
 	if err != nil {
 		t.Errorf("c2.ReadCoils() should have succeeded, got: %v", err)
 	}
@@ -251,7 +251,7 @@ func TestTLSServer(t *testing.T) {
 		t.Errorf("coils[0] should have been true")
 	}
 
-	coils, err = c1.ReadCoils(0, 5)
+	coils, err = c1.ReadCoils(1, 0, 5)
 	if err != nil {
 		t.Errorf("c1.ReadCoils() should have succeeded, got: %v", err)
 	}
@@ -261,21 +261,18 @@ func TestTLSServer(t *testing.T) {
 
 	// client #1 should only be allowed access to holding registers of unit id #1
 	// while client#2 should be allowed access to holding registers of unit ids #1 and #4
-	c1.SetUnitID(1)
-	err = c1.WriteRegister(2, 100)
+	err = c1.WriteRegister(1, 2, 100)
 	if err != nil {
 		t.Errorf("c1.WriteRegister() should have succeeded, got: %v", err)
 	}
 
-	c1.SetUnitID(4)
-	err = c1.WriteRegister(2, 200)
+	err = c1.WriteRegister(4, 2, 200)
 	if err != ErrIllegalFunction {
 		t.Errorf("c1.WriteRegister() should have failed with %v, got: %v",
 			ErrIllegalFunction, err)
 	}
 
-	c2.SetUnitID(1)
-	regs, err = c2.ReadRegisters(1, 2, HoldingRegister)
+	regs, err = c2.ReadRegisters(1, 1, 2, HoldingRegister)
 	if err != nil {
 		t.Errorf("c2.ReadRegisters() should have succeeded, got: %v", err)
 	}
@@ -283,13 +280,12 @@ func TestTLSServer(t *testing.T) {
 		t.Errorf("unexpected register values: %v", regs)
 	}
 
-	c2.SetUnitID(4)
-	err = c2.WriteRegister(2, 200)
+	err = c2.WriteRegister(4, 2, 200)
 	if err != nil {
 		t.Errorf("c2.WriteRegister() should have succeeded, got: %v", err)
 	}
 
-	regs, err = c2.ReadRegisters(1, 2, HoldingRegister)
+	regs, err = c2.ReadRegisters(4, 1, 2, HoldingRegister)
 	if err != nil {
 		t.Errorf("c2.ReadRegisters() should have succeeded, got: %v", err)
 	}

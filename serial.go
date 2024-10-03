@@ -49,6 +49,17 @@ func (spw *serialPortWrapper) Close() (err error) {
 	return
 }
 
+// Reset the input and output buffer
+func (spw *serialPortWrapper) Reset() (err error) {
+	if err := spw.port.ResetInputBuffer(); err != nil {
+		return err
+	}
+	if err := spw.port.ResetOutputBuffer(); err != nil {
+		return err
+	}
+	return nil
+}
+
 // Reads bytes from the underlying serial port.
 // If Read() is called after the deadline, a timeout error is returned without
 // attempting to read from the serial port.

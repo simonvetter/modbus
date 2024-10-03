@@ -25,6 +25,7 @@ type rtuLink interface {
 	Read([]byte) (int, error)
 	Write([]byte) (int, error)
 	SetDeadline(time.Time) error
+	Reset() error
 }
 
 // Returns a new RTU transport.
@@ -99,7 +100,7 @@ func (rt *rtuTransport) ExecuteRequest(req *pdu) (res *pdu, err error) {
 		// wait for and flush any data coming off the link to allow
 		// devices to re-sync
 		time.Sleep(time.Duration(maxRTUFrameLength) * rt.t1)
-		discard(rt.link)
+		rt.link.Reset()
 	}
 
 	// mark the time if we heard anything back
@@ -248,16 +249,6 @@ func expectedResponseLength(responseCode uint8, responseLength uint8) (byteCount
 	}
 
 	return
-}
-
-// Discards the contents of the link's rx buffer, eating up to 1kB of data.
-// Note that on a serial line, this call may block for up to serialConf.Timeout
-// i.e. 10ms.
-func discard(link rtuLink) {
-	var rxbuf = make([]byte, 1024)
-
-	link.SetDeadline(time.Now().Add(500 * time.Microsecond))
-	io.ReadFull(link, rxbuf)
 }
 
 // Returns how long it takes to send 1 byte on a serial line at the

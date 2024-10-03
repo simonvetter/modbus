@@ -350,7 +350,6 @@ func main() {
 				os.Exit(2)
 			}
 
-			o.op = setUnitID
 			o.unitID, err = parseUnitID(splitArgs[1])
 			if err != nil {
 				fmt.Printf("failed to parse '%s' as unit id: %v\n", splitArgs[1], err)
@@ -456,7 +455,6 @@ func main() {
 		fmt.Printf("set unit id: value '%v' out of range\n", unitID)
 		os.Exit(1)
 	}
-	client.SetUnitID(uint8(unitID))
 
 	// connect to the remote host/open the serial port
 	err = client.Open()
@@ -473,9 +471,9 @@ func main() {
 			var res []bool
 
 			if o.isCoil {
-				res, err = client.ReadCoils(o.addr, o.quantity+1)
+				res, err = client.ReadCoils(uint8(unitID), o.addr, o.quantity+1)
 			} else {
-				res, err = client.ReadDiscreteInputs(o.addr, o.quantity+1)
+				res, err = client.ReadDiscreteInputs(uint8(unitID), o.addr, o.quantity+1)
 			}
 			if err != nil {
 				fmt.Printf("failed to read coils/discrete inputs: %v\n", err)
@@ -491,9 +489,9 @@ func main() {
 			var res []uint16
 
 			if o.isHoldingReg {
-				res, err = client.ReadRegisters(o.addr, o.quantity+1, modbus.HoldingRegister)
+				res, err = client.ReadRegisters(uint8(unitID), o.addr, o.quantity+1, modbus.HoldingRegister)
 			} else {
-				res, err = client.ReadRegisters(o.addr, o.quantity+1, modbus.InputRegister)
+				res, err = client.ReadRegisters(uint8(unitID), o.addr, o.quantity+1, modbus.InputRegister)
 			}
 			if err != nil {
 				fmt.Printf("failed to read holding/input registers: %v\n", err)
@@ -517,9 +515,9 @@ func main() {
 			var res []uint32
 
 			if o.isHoldingReg {
-				res, err = client.ReadUint32s(o.addr, o.quantity+1, modbus.HoldingRegister)
+				res, err = client.ReadUint32s(uint8(unitID), o.addr, o.quantity+1, modbus.HoldingRegister)
 			} else {
-				res, err = client.ReadUint32s(o.addr, o.quantity+1, modbus.InputRegister)
+				res, err = client.ReadUint32s(uint8(unitID), o.addr, o.quantity+1, modbus.InputRegister)
 			}
 			if err != nil {
 				fmt.Printf("failed to read holding/input registers: %v\n", err)
@@ -543,9 +541,9 @@ func main() {
 			var res []float32
 
 			if o.isHoldingReg {
-				res, err = client.ReadFloat32s(o.addr, o.quantity+1, modbus.HoldingRegister)
+				res, err = client.ReadFloat32s(uint8(unitID), o.addr, o.quantity+1, modbus.HoldingRegister)
 			} else {
-				res, err = client.ReadFloat32s(o.addr, o.quantity+1, modbus.InputRegister)
+				res, err = client.ReadFloat32s(uint8(unitID), o.addr, o.quantity+1, modbus.InputRegister)
 			}
 			if err != nil {
 				fmt.Printf("failed to read holding/input registers: %v\n", err)
@@ -562,9 +560,9 @@ func main() {
 			var res []uint64
 
 			if o.isHoldingReg {
-				res, err = client.ReadUint64s(o.addr, o.quantity+1, modbus.HoldingRegister)
+				res, err = client.ReadUint64s(uint8(unitID), o.addr, o.quantity+1, modbus.HoldingRegister)
 			} else {
-				res, err = client.ReadUint64s(o.addr, o.quantity+1, modbus.InputRegister)
+				res, err = client.ReadUint64s(uint8(unitID), o.addr, o.quantity+1, modbus.InputRegister)
 			}
 			if err != nil {
 				fmt.Printf("failed to read holding/input registers: %v\n", err)
@@ -588,9 +586,9 @@ func main() {
 			var res []float64
 
 			if o.isHoldingReg {
-				res, err = client.ReadFloat64s(o.addr, o.quantity+1, modbus.HoldingRegister)
+				res, err = client.ReadFloat64s(uint8(unitID), o.addr, o.quantity+1, modbus.HoldingRegister)
 			} else {
-				res, err = client.ReadFloat64s(o.addr, o.quantity+1, modbus.InputRegister)
+				res, err = client.ReadFloat64s(uint8(unitID), o.addr, o.quantity+1, modbus.InputRegister)
 			}
 			if err != nil {
 				fmt.Printf("failed to read holding/input registers: %v\n", err)
@@ -607,9 +605,9 @@ func main() {
 			var res []byte
 
 			if o.isHoldingReg {
-				res, err = client.ReadBytes(o.addr, o.quantity+1, modbus.HoldingRegister)
+				res, err = client.ReadBytes(uint8(unitID), o.addr, o.quantity+1, modbus.HoldingRegister)
 			} else {
-				res, err = client.ReadBytes(o.addr, o.quantity+1, modbus.InputRegister)
+				res, err = client.ReadBytes(uint8(unitID), o.addr, o.quantity+1, modbus.InputRegister)
 			}
 			if err != nil {
 				fmt.Printf("failed to read holding/input registers: %v\n", err)
@@ -631,7 +629,7 @@ func main() {
 			}
 
 		case writeCoil:
-			err = client.WriteCoil(o.addr, o.coil)
+			err = client.WriteCoil(uint8(unitID), o.addr, o.coil)
 			if err != nil {
 				fmt.Printf("failed to write %v at coil address 0x%04x: %v\n",
 					o.coil, o.addr, err)
@@ -641,7 +639,7 @@ func main() {
 			}
 
 		case writeUint16:
-			err = client.WriteRegister(o.addr, o.u16)
+			err = client.WriteRegister(uint8(unitID), o.addr, o.u16)
 			if err != nil {
 				fmt.Printf("failed to write %v at register address 0x%04x: %v\n",
 					o.u16, o.addr, err)
@@ -651,7 +649,7 @@ func main() {
 			}
 
 		case writeInt16:
-			err = client.WriteRegister(o.addr, o.u16)
+			err = client.WriteRegister(uint8(unitID), o.addr, o.u16)
 			if err != nil {
 				fmt.Printf("failed to write %v at register address 0x%04x: %v\n",
 					int16(o.u16), o.addr, err)
@@ -661,7 +659,7 @@ func main() {
 			}
 
 		case writeUint32:
-			err = client.WriteUint32(o.addr, o.u32)
+			err = client.WriteUint32(uint8(unitID), o.addr, o.u32)
 			if err != nil {
 				fmt.Printf("failed to write %v at address 0x%04x: %v\n",
 					o.u32, o.addr, err)
@@ -671,7 +669,7 @@ func main() {
 			}
 
 		case writeInt32:
-			err = client.WriteUint32(o.addr, o.u32)
+			err = client.WriteUint32(uint8(unitID), o.addr, o.u32)
 			if err != nil {
 				fmt.Printf("failed to write %v at address 0x%04x: %v\n",
 					int32(o.u32), o.addr, err)
@@ -681,7 +679,7 @@ func main() {
 			}
 
 		case writeFloat32:
-			err = client.WriteFloat32(o.addr, o.f32)
+			err = client.WriteFloat32(uint8(unitID), o.addr, o.f32)
 			if err != nil {
 				fmt.Printf("failed to write %f at address 0x%04x: %v\n",
 					o.f32, o.addr, err)
@@ -691,7 +689,7 @@ func main() {
 			}
 
 		case writeUint64:
-			err = client.WriteUint64(o.addr, o.u64)
+			err = client.WriteUint64(uint8(unitID), o.addr, o.u64)
 			if err != nil {
 				fmt.Printf("failed to write %v at address 0x%04x: %v\n",
 					o.u64, o.addr, err)
@@ -701,7 +699,7 @@ func main() {
 			}
 
 		case writeInt64:
-			err = client.WriteUint64(o.addr, o.u64)
+			err = client.WriteUint64(uint8(unitID), o.addr, o.u64)
 			if err != nil {
 				fmt.Printf("failed to write %v at address 0x%04x: %v\n",
 					int64(o.u64), o.addr, err)
@@ -711,7 +709,7 @@ func main() {
 			}
 
 		case writeFloat64:
-			err = client.WriteFloat64(o.addr, o.f64)
+			err = client.WriteFloat64(uint8(unitID), o.addr, o.f64)
 			if err != nil {
 				fmt.Printf("failed to write %f at address 0x%04x: %v\n",
 					o.f64, o.addr, err)
@@ -721,7 +719,7 @@ func main() {
 			}
 
 		case writeBytes:
-			err = client.WriteBytes(o.addr, o.bytes)
+			err = client.WriteBytes(uint8(unitID), o.addr, o.bytes)
 			if err != nil {
 				fmt.Printf("failed to write %v at address 0x%04x: %v\n",
 					o.bytes, o.addr, err)
@@ -732,9 +730,6 @@ func main() {
 
 		case sleep:
 			time.Sleep(o.duration)
-
-		case setUnitID:
-			client.SetUnitID(o.unitID)
 
 		case repeat:
 			// start over
@@ -783,7 +778,6 @@ const (
 	writeUint64
 	writeFloat64
 	writeBytes
-	setUnitID
 	sleep
 	repeat
 	date
@@ -1183,11 +1177,6 @@ Available commands:
   sleep:300s           sleeps for 300 seconds
   sleep:3m             sleeps for 3 minutes
   sleep:3ms            sleeps for 3 milliseconds
-
-* <setUnitId|suid|sid>:<unit id>
-  Switch to unit id (slave id) <unit id> for subsequent requests.
-
-  sid:10               selects unit id #10
 
 * repeat
   Restart execution of the given commands.
