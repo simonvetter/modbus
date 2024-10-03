@@ -394,8 +394,10 @@ func main() {
 			case "i", "ir", "input", "inputRegisters":
 				o.op = scanRegisters
 				o.isHoldingReg = false
+			case "s", "sid":
+				o.op = scanUnitId
 			default:
-				fmt.Printf("unknown register type '%v' (valid options <coils|di|hr|ir>\n",
+				fmt.Printf("unknown scan/register type '%s' (valid options <coils|di|hr|ir|s>\n",
 					splitArgs[1])
 				os.Exit(2)
 			}
@@ -744,6 +746,9 @@ func main() {
 		case scanRegisters:
 			performRegisterScan(client, o.isHoldingReg)
 
+		case scanUnitId:
+			performUnitIdScan(client)
+
 		case ping:
 			performPing(client, o.quantity, o.duration)
 
@@ -783,6 +788,7 @@ const (
 	date
 	scanBools
 	scanRegisters
+	scanUnitId
 	ping
 )
 
@@ -930,7 +936,7 @@ func parseHexBytes(in string) (out []byte, err error) {
 	return
 }
 
-func performBoolScan(client *modbus.Client, isCoil bool) {
+func performBoolScan(client *modbus.Client, unitID uint8, isCoil bool) {
 	var err error
 	var addr uint32
 	var val bool
@@ -947,9 +953,9 @@ func performBoolScan(client *modbus.Client, isCoil bool) {
 
 	for addr = 0; addr <= 0xffff; addr++ {
 		if isCoil {
-			val, err = client.ReadCoil(uint16(addr))
+			val, err = client.ReadCoil(unitID, uint16(addr))
 		} else {
-			val, err = client.ReadDiscreteInput(uint16(addr))
+			val, err = client.ReadDiscreteInput(unitID, uint16(addr))
 		}
 		if err == modbus.ErrIllegalDataAddress || err == modbus.ErrIllegalFunction {
 			// the register does not exist
@@ -969,7 +975,7 @@ func performBoolScan(client *modbus.Client, isCoil bool) {
 	return
 }
 
-func performRegisterScan(client *modbus.Client, isHoldingReg bool) {
+func performRegisterScan(client *modbus.Client, unitID uint8, isHoldingReg bool) {
 	var err error
 	var addr uint32
 	var val uint16
@@ -986,9 +992,9 @@ func performRegisterScan(client *modbus.Client, isHoldingReg bool) {
 
 	for addr = 0; addr <= 0xffff; addr++ {
 		if isHoldingReg {
-			val, err = client.ReadRegister(uint16(addr), modbus.HoldingRegister)
+			val, err = client.ReadRegister(unitID, uint16(addr), modbus.HoldingRegister)
 		} else {
-			val, err = client.ReadRegister(uint16(addr), modbus.InputRegister)
+			val, err = client.ReadRegister(unitID, uint16(addr), modbus.InputRegister)
 		}
 		if err == modbus.ErrIllegalDataAddress || err == modbus.ErrIllegalFunction {
 			// the register does not exist
@@ -1005,6 +1011,43 @@ func performRegisterScan(client *modbus.Client, isHoldingReg bool) {
 	}
 
 	fmt.Printf("found %v %ss\n", count, regType)
+
+	return
+}
+
+func performUnitIdScan(client *modbus.Client) {
+	var err error
+	var countOk uint
+	var countErr uint
+	var countTimeout uint
+	var countGWTimeout uint
+
+	fmt.Println("starting unit id scan")
+
+	for unitId := uint8(0); unitId <= 0xff; unitId++ {
+		_, err = client.ReadRegister(unitId, 0, modbus.InputRegister)
+		switch err {
+		case nil,
+			modbus.ErrIllegalDataAddress,
+			modbus.ErrIllegalFunction,
+			modbus.ErrIllegalDataValue:
+			fmt.Printf("0x%02x (%3v): ok\n", unitId, unitId)
+			countOk++
+
+		case modbus.ErrRequestTimedOut:
+			countTimeout++
+
+		case modbus.ErrGWTargetFailedToRespond:
+			countGWTimeout++
+
+		default:
+			fmt.Printf("0x%02x (%3v): %v\n", unitId, unitId, err)
+			countErr++
+		}
+	}
+
+	fmt.Printf("found %v devices (%v errors, %v timeouts, %v gateway timeouts)\n",
+		countOk, countErr, countTimeout, countGWTimeout)
 
 	return
 }
@@ -1192,7 +1235,8 @@ Available commands:
   - "c", "coils",
   - "di", "discreteInputs",
   - "hr", "holdingRegisters",
-  - "ir", "inputRegisters".
+  - "ir", "inputRegisters",
+  - "s", "sid".
 
   scan:hr              scans the device for holding registers.
   scan:di              scans the device for discrete inputs.
@@ -1201,6 +1245,13 @@ Available commands:
   Adresses for which a non-error response is received are listed, along with the value received.
   Errors other than Illegal Data Address and Illegal Function are also shown, as they should
   not happen in sane implementations.
+
+  scan:sid             scans the target for devices.
+
+  Scans all unit IDs (0 to 255) using a single read input register request. Addresses responding
+  positively or with non-timeout errors are shown, while timeouts and gateway timeouts are ignored.
+  This command can be used to find active nodes on RS485 buses, behind gateways or in composite
+  devices.
 
 * ping:<count>[:interval]
   Executes <count> modbus reads (1 holding register at address 0x0000), either back to back or
