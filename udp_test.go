@@ -161,6 +161,4 @@ func TestUDPSockWrapper(t *testing.T) {
 	// cleanup
 	sock1.Close()
 	sock2.Close()
-
-	return
 }

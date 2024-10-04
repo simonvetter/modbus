@@ -55,8 +55,6 @@ func TestAssembleMBAPFrame(t *testing.T) {
 			t.Errorf("expected 0x%02x at position %v, got 0x%02x", b, i, frame[i])
 		}
 	}
-
-	return
 }
 
 func TestTCPTransportReadResponse(t *testing.T) {
@@ -149,7 +147,7 @@ func TestTCPTransportReadResponse(t *testing.T) {
 		0x00, 0x01, // length (big endian)
 		0x31, // unit id
 	}
-	res, err = tt.readResponse()
+	_, err = tt.readResponse()
 	if err != ErrProtocolError {
 		t.Errorf("readResponse() should have returned ErrProtocolError, got %v", err)
 	}
@@ -197,15 +195,13 @@ func TestTCPTransportReadResponse(t *testing.T) {
 		0x10, 0x0a, // length (big endian)
 		0x31, // unit id
 	}
-	res, err = tt.readResponse()
+	_, err = tt.readResponse()
 	if err != ErrProtocolError {
 		t.Errorf("readResponse() should have returned ErrProtocolError, got %v", err)
 	}
 
 	p1.Close()
 	p2.Close()
-
-	return
 }
 
 func TestTCPTransportReadRequest(t *testing.T) {
@@ -275,6 +271,7 @@ func TestTCPTransportReadRequest(t *testing.T) {
 	}
 	if req == nil {
 		t.Errorf("ReadREsponse() should have returned a non-nil request")
+		return
 	}
 	if req.unitID != 0xfa {
 		t.Errorf("expected 0xfa as unit id, got 0x%02x", req.unitID)
@@ -299,8 +296,6 @@ func TestTCPTransportReadRequest(t *testing.T) {
 	if tt.lastTxnID != 0x9218 {
 		t.Errorf("tt.lastTxnId should have been 0x0a00, saw 0x%02x", tt.lastTxnID)
 	}
-
-	return
 }
 
 func TestTCPTransportWriteResponse(t *testing.T) {
@@ -309,14 +304,13 @@ func TestTCPTransportWriteResponse(t *testing.T) {
 	var done chan bool
 	var err error
 
-	done = make(chan bool, 0)
+	done = make(chan bool)
 	p1, p2 = net.Pipe()
 	go func(t *testing.T, pipe net.Conn, done chan bool) {
 		var err error
 		var rxbuf []byte
-		var expected []byte
 
-		expected = []byte{
+		expected := []byte{
 			0xc0, 0x1f, // transaction identifier (big endian)
 			0x00, 0x00, // protocol identifier
 			0x00, 0x0b, // length (big endian)
@@ -342,7 +336,6 @@ func TestTCPTransportWriteResponse(t *testing.T) {
 		}
 
 		done <- true
-		return
 	}(t, p2, done)
 
 	tt = newTCPTransport(p1, 10*time.Millisecond, nil)
@@ -365,6 +358,4 @@ func TestTCPTransportWriteResponse(t *testing.T) {
 
 	// wait for the checker goroutine to return
 	<-done
-
-	return
 }
