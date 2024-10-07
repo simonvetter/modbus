@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/simonvetter/modbus"
+	"github.com/munnik/modbus"
 )
 
 /*

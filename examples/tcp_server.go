@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/simonvetter/modbus"
+	"github.com/munnik/modbus"
 )
 
 const (
