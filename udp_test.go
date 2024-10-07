@@ -8,14 +8,14 @@ import (
 )
 
 func TestUDPSockWrapper(t *testing.T) {
-	var err     error
-	var usw     *udpSockWrapper
-	var sock1   *net.UDPConn
-	var sock2   *net.UDPConn
-	var addr    *net.UDPAddr
-	var txchan  chan []byte
-	var rxbuf   []byte
-	var count   int
+	var err error
+	var usw *udpSockWrapper
+	var sock1 *net.UDPConn
+	var sock2 *net.UDPConn
+	var addr *net.UDPAddr
+	var txchan chan []byte
+	var rxbuf []byte
+	var count int
 
 	addr, err = net.ResolveUDPAddr("udp", "localhost:5502")
 	if err != nil {
@@ -53,11 +53,11 @@ func TestUDPSockWrapper(t *testing.T) {
 		0xc1, 0x6e, // CRC
 	}
 	// then push random junk
-	txchan <-[]byte{
+	txchan <- []byte{
 		0xaa, 0xbb, 0xcc,
 	}
 	// then some more
-	txchan <-[]byte{
+	txchan <- []byte{
 		0xdd, 0xee,
 	}
 
@@ -161,6 +161,4 @@ func TestUDPSockWrapper(t *testing.T) {
 	// cleanup
 	sock1.Close()
 	sock2.Close()
-
-	return
 }

@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/simonvetter/modbus"
+	"github.com/munnik/modbus"
 )
 
 /*
@@ -18,11 +18,11 @@ import (
  */
 
 func main() {
-	var client         *modbus.ModbusClient
-	var err            error
-	var clientKeyPair  tls.Certificate
+	var client *modbus.Client
+	var err error
+	var clientKeyPair tls.Certificate
 	var serverCertPool *x509.CertPool
-	var regs           []uint16
+	var regs []uint16
 
 	// load the client certificate and its associated private key, which
 	// are used to authenticate the client to the server
@@ -43,15 +43,15 @@ func main() {
 
 	// create a client targetting host secure-plc on port 802 using
 	// modbus TCP over TLS (MBAPS)
-	client, err = modbus.NewClient(&modbus.ClientConfiguration{
+	client, err = modbus.NewClient(&modbus.Configuration{
 		// tcp+tls is the moniker for MBAPS (modbus/tcp encapsulated in
 		// TLS),
 		// 802/tcp is the IANA-registered port for MBAPS.
-		URL:           "tcp+tls://secure-plc:802",
+		URL: "tcp+tls://secure-plc:802",
 		// set the client-side cert and key
 		TLSClientCert: &clientKeyPair,
 		// set the server/CA certificate
-		TLSRootCAs:    serverCertPool,
+		TLSRootCAs: serverCertPool,
 	})
 	if err != nil {
 		fmt.Printf("failed to create modbus client: %v\n", err)
@@ -66,7 +66,7 @@ func main() {
 	}
 
 	// read two 16-bit holding registers at address 0x4000
-	regs, err = client.ReadRegisters(0x4000, 2, modbus.HOLDING_REGISTER)
+	regs, err = client.ReadRegisters(0x4000, 2, modbus.HoldingRegister)
 	if err != nil {
 		fmt.Printf("failed to read registers 0x4000 and 0x4001: %v\n", err)
 	} else {
