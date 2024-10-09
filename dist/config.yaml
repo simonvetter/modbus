@@ -1,7 +1,7 @@
 project_name: modbus
 release:
   github:
-    owner: simonvetter
+    owner: munnik
     name: modbus
   name_template: '{{.Tag}}'
 builds:
