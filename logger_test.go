@@ -7,37 +7,31 @@ import (
 )
 
 func TestClientCustomLogger(t *testing.T) {
-	var buf    bytes.Buffer
-	var logger *log.Logger
+	var buf bytes.Buffer
 
-	logger = log.New(&buf, "external-prefix: ", 0)
+	logger := log.New(&buf, "external-prefix: ", 0)
 
-	_, _ = NewClient(&ClientConfiguration{
+	_, _ = NewClient(&Configuration{
 		Logger: logger,
-		URL: "sometype://sometarget",
+		URL:    "sometype://sometarget",
 	})
 
 	if buf.String() != "external-prefix: modbus-client(sometarget) [error]: unsupported client type 'sometype'\n" {
 		t.Errorf("unexpected logger output '%s'", buf.String())
 	}
-
-	return
 }
 
 func TestServerCustomLogger(t *testing.T) {
-	var buf    bytes.Buffer
-	var logger *log.Logger
+	var buf bytes.Buffer
 
-	logger = log.New(&buf, "external-prefix: ", 0)
+	logger := log.New(&buf, "external-prefix: ", 0)
 
 	_, _ = NewServer(&ServerConfiguration{
 		Logger: logger,
-		URL: "tcp://",
+		URL:    "tcp://",
 	}, nil)
 
 	if buf.String() != "external-prefix: modbus-server() [error]: missing host part in URL 'tcp://'\n" {
 		t.Errorf("unexpected logger output '%s'", buf.String())
 	}
-
-	return
 }

@@ -100,3 +100,7 @@ func (usw *udpSockWrapper) RemoteAddr() (addr net.Addr) {
 
 	return
 }
+
+func (usw *udpSockWrapper) Reset() error {
+	return nil
+}

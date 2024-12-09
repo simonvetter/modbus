@@ -2,8 +2,8 @@ package modbus
 
 import (
 	"fmt"
-	"os"
 	"log"
+	"os"
 )
 
 type logger struct {
@@ -13,8 +13,11 @@ type logger struct {
 
 func newLogger(prefix string, customLogger *log.Logger) (l *logger) {
 	l = &logger{
-		prefix:	prefix,
+		prefix:       prefix,
 		customLogger: customLogger,
+	}
+	if l.customLogger != nil {
+		l.customLogger.SetFlags(log.LstdFlags | log.Llongfile)
 	}
 
 	return
@@ -22,52 +25,37 @@ func newLogger(prefix string, customLogger *log.Logger) (l *logger) {
 
 func (l *logger) Info(msg string) {
 	l.write(fmt.Sprintf("%s [info]: %s\n", l.prefix, msg))
-
-	return
 }
 
 func (l *logger) Infof(format string, msg ...interface{}) {
 	l.write(fmt.Sprintf("%s [info]: %s\n", l.prefix, fmt.Sprintf(format, msg...)))
 
-	return
 }
 
 func (l *logger) Warning(msg string) {
 	l.write(fmt.Sprintf("%s [warn]: %s\n", l.prefix, msg))
-
-	return
 }
 
 func (l *logger) Warningf(format string, msg ...interface{}) {
 	l.write(fmt.Sprintf("%s [warn]: %s\n", l.prefix, fmt.Sprintf(format, msg...)))
-
-	return
 }
 
 func (l *logger) Error(msg string) {
 	l.write(fmt.Sprintf("%s [error]: %s\n", l.prefix, msg))
-
-	return
 }
 
 func (l *logger) Errorf(format string, msg ...interface{}) {
 	l.write(fmt.Sprintf("%s [error]: %s\n", l.prefix, fmt.Sprintf(format, msg...)))
-
-	return
 }
 
 func (l *logger) Fatal(msg string) {
 	l.Error(msg)
 	os.Exit(1)
-
-	return
 }
 
 func (l *logger) Fatalf(format string, msg ...interface{}) {
 	l.Errorf(format, msg...)
 	os.Exit(1)
-
-	return
 }
 
 func (l *logger) write(msg string) {
@@ -76,6 +64,4 @@ func (l *logger) write(msg string) {
 	} else {
 		l.customLogger.Print(msg)
 	}
-
-	return
 }

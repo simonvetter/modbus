@@ -41,9 +41,7 @@ type crc struct {
 
 // Prepares the CRC generator for use.
 func (c *crc) init() {
-	c.crc	= 0xffff
-
-	return
+	c.crc = 0xffff
 }
 
 // Adds the given bytes to the CRC.
@@ -51,23 +49,21 @@ func (c *crc) add(in []byte) {
 	var index byte
 
 	for _, b := range in {
-		index	= b ^ byte(c.crc & 0xff)
-		c.crc	>>= 8
-		c.crc	^= crcTable[index]
+		index = b ^ byte(c.crc&0xff)
+		c.crc >>= 8
+		c.crc ^= crcTable[index]
 	}
-
-	return
 }
 
 // Returns the CRC as two bytes, swapped.
 func (c *crc) value() (value []byte) {
-	value = uint16ToBytes(LITTLE_ENDIAN, c.crc)
+	value = uint16ToBytes(LittleEndian, c.crc)
 
 	return
 }
 
 func (c *crc) isEqual(low byte, high byte) (yes bool) {
-	yes = (bytesToUint16(LITTLE_ENDIAN, []byte{low, high}) == c.crc)
+	yes = (bytesToUint16(LittleEndian, []byte{low, high}) == c.crc)
 
 	return
 }
