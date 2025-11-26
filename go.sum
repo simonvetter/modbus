@@ -1,2 +1,4 @@
 github.com/goburrow/serial v0.1.0 h1:v2T1SQa/dlUqQiYIT8+Cu7YolfqAi3K96UmhwYyuSrA=
 github.com/goburrow/serial v0.1.0/go.mod h1:sAiqG0nRVswsm1C97xsttiYCzSLBmUZ/VSlVLZJ8haA=
+github.com/goburrow/serial v0.1.1-0.20211022031912-bfb69110f8dd h1:qJthTC7IG7e/QYR4i2QHxcDmDdB72FXsaGo4CUQvsPo=
+github.com/goburrow/serial v0.1.1-0.20211022031912-bfb69110f8dd/go.mod h1:sAiqG0nRVswsm1C97xsttiYCzSLBmUZ/VSlVLZJ8haA=
