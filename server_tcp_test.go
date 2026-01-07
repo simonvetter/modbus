@@ -1,6 +1,7 @@
 package modbus
 
 import (
+	"fmt"
 	"testing"
 	"time"
 )
@@ -17,7 +18,7 @@ func TestTCPServerWithConcurrentConnections(t *testing.T) {
 	th = &tcpTestHandler{}
 
 	server, err = NewServer(&ServerConfiguration{
-		URL:		"tcp://localhost:5502",
+		URL:		"tcp://localhost:0",
 		MaxClients:	2,
 	}, th)
 	if err != nil {
@@ -29,21 +30,26 @@ func TestTCPServerWithConcurrentConnections(t *testing.T) {
 		t.Errorf("failed to start server: %v", err)
 	}
 
+	listenPort, err := server.ListenPort()
+	if err != nil {
+		t.Fatalf("failed to get server listen port: %v", err)
+	}
+
 	// create 3 modbus clients
 	c1, err	= NewClient(&ClientConfiguration{
-		URL:		"tcp://localhost:5502",
+		URL:		fmt.Sprintf("tcp://localhost:%d", listenPort),
 	})
 	if err != nil {
 		t.Errorf("failed to create client: %v", err)
 	}
 	c2, err	= NewClient(&ClientConfiguration{
-		URL:		"tcp://localhost:5502",
+		URL:		fmt.Sprintf("tcp://localhost:%d", listenPort),
 	})
 	if err != nil {
 		t.Errorf("failed to create client: %v", err)
 	}
 	c3, err	= NewClient(&ClientConfiguration{
-		URL:		"tcp://localhost:5502",
+		URL:		fmt.Sprintf("tcp://localhost:%d", listenPort),
 	})
 	if err != nil {
 		t.Errorf("failed to create client: %v", err)
