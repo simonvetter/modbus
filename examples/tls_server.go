@@ -83,7 +83,7 @@ import (
  * $ go run cmd/modbus-cli.go --target tcp+tls://localhost:5802 --cert certs/operator-client.cert.pem \
  *   --key certs/operator-client.key.pem --ca certs/server.cert.pem wr:uint32:0:1598692358
  *
- * reading the cock as 'operator' should also work:
+ * reading the clock as 'operator' should also work:
  * $ go run cmd/modbus-cli.go --target tcp+tls://localhost:5802 --cert certs/operator-client.cert.pem \
  *   --key certs/operator-client.key.pem --ca certs/server.cert.pem rh:uint32:0
  */
