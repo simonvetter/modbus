@@ -36,6 +36,9 @@ type ServerConfiguration struct {
 	// Logger provides a custom sink for log messages.
 	// If nil, messages will be written to stdout.
 	Logger        *log.Logger
+	// OnClientConnect is an optional callback function that will be called
+	// when a new client attempts to connect to the server.
+	OnClientConnect func(sock net.Conn)
 }
 
 // Request object passed to the coil handler.
@@ -279,6 +282,14 @@ func (ms *ModbusServer) Stop() (err error) {
 	return
 }
 
+// Returns the amount of active client connected to the server
+func (ms *ModbusServer) ConnectionCount() (count int) {
+	ms.lock.Lock()
+	defer ms.lock.Unlock()
+
+	return len(ms.tcpClients)
+}
+
 // Accepts new client connections if the configured connection limit allows it.
 // Each connection is served from a dedicated goroutine to allow for concurrent
 // connections.
@@ -297,6 +308,10 @@ func (ms *ModbusServer) acceptTCPClients() {
 			}
 			ms.logger.Warningf("failed to accept client connection: %v", err)
 			continue
+		}
+		
+		if ms.conf.OnClientConnect != nil {
+			ms.conf.OnClientConnect(sock)
 		}
 
 		ms.lock.Lock()
