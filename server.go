@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -253,6 +254,27 @@ func (ms *ModbusServer) Start() (err error) {
 	ms.started = true
 
 	return
+}
+
+// ListenPort returns the port that the modbus server is bound to
+func (ms *ModbusServer) ListenPort() (uint16, error) {
+	tcpListener := ms.tcpListener
+	if tcpListener == nil {
+		return 0, fmt.Errorf("TCP transport not set")
+	}
+
+	listenAddr := tcpListener.Addr().String()
+	_, port, err := net.SplitHostPort(listenAddr)
+	if err != nil {
+		return 0, err
+	}
+
+	portInt, err := strconv.ParseUint(port, 10, 16)
+	if err != nil {
+		return 0, err
+	}
+
+	return uint16(portInt), nil
 }
 
 // Stops accepting new client connections and closes any active session.
