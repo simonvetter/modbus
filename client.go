@@ -1207,6 +1207,24 @@ func (mc *ModbusClient) writeRegisters(addr uint16, values []byte) (err error) {
 	return
 }
 
+// Send and receive a custom PDU with arbitrary function code and data.
+func (mc *ModbusClient) CustomPDU(functionCode uint8, data []byte) (resFunctionCode uint8, resData []byte, err error) {
+	mc.lock.Lock()
+	defer mc.lock.Unlock()
+
+	var res *pdu
+	res, err = mc.executeRequest(&pdu{
+		unitId:       mc.unitId,
+		functionCode: functionCode,
+		payload:      data,
+	})
+	if res != nil {
+		resFunctionCode = res.functionCode
+		resData = res.payload
+	}
+	return
+}
+
 func (mc *ModbusClient) executeRequest(req *pdu) (res *pdu, err error) {
 	// send the request over the wire, wait for and decode the response
 	res, err	= mc.transport.ExecuteRequest(req)
