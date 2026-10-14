@@ -20,6 +20,14 @@ type rtuTransport struct {
 	t1           time.Duration
 }
 
+// SetTimeout changes the per-request timeout for subsequent operations and
+// returns the value in effect before the call.
+func (rt *rtuTransport) SetTimeout(t time.Duration) (old time.Duration) {
+	old = rt.timeout
+	rt.timeout = t
+	return
+}
+
 type rtuLink interface {
 	Close()		(error)
 	Read([]byte)	(int, error)

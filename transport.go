@@ -1,5 +1,7 @@
 package modbus
 
+import "time"
+
 type transportType uint
 const (
 	modbusRTU        transportType   = 1
@@ -15,4 +17,5 @@ type transport interface {
 	ExecuteRequest(*pdu) (*pdu, error)
 	ReadRequest()        (*pdu, error)
 	WriteResponse(*pdu)  (error)
+	SetTimeout(time.Duration) time.Duration
 }

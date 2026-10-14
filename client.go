@@ -320,6 +320,24 @@ func (mc *ModbusClient) Open() (err error) {
 	return
 }
 
+// SetTimeout changes the per-request timeout for subsequent operations and
+// returns the value in effect before the call. Pass 0 to restore the timeout
+// configured at client creation, the same meaning 0 has in Config.Timeout.
+func (mc *ModbusClient) SetTimeout(t time.Duration) (old time.Duration) {
+	mc.lock.Lock()
+	defer mc.lock.Unlock()
+
+	if t == 0 {
+		t = mc.conf.Timeout
+	}
+
+	if mc.transport != nil {
+		return mc.transport.SetTimeout(t)
+	}
+
+	return
+}
+
 // Closes the underlying transport.
 func (mc *ModbusClient) Close() (err error) {
 	mc.lock.Lock()

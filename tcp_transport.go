@@ -20,6 +20,14 @@ type tcpTransport struct {
 	lastTxnId	uint16
 }
 
+// SetTimeout changes the per-request timeout for subsequent operations and
+// returns the value in effect before the call.
+func (tt *tcpTransport) SetTimeout(t time.Duration) (old time.Duration) {
+	old = tt.timeout
+	tt.timeout = t
+	return
+}
+
 // Returns a new TCP transport.
 func newTCPTransport(socket net.Conn, timeout time.Duration, customLogger *log.Logger) (tt *tcpTransport) {
 	tt = &tcpTransport{
