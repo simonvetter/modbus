@@ -408,7 +408,7 @@ func (ms *ModbusServer) handleTransport(t transport, clientAddr string, clientRo
 			// ensure the reply never exceeds the maximum PDU length and we
 			// never read past 0xffff
 			if quantity > 2000 || quantity == 0 {
-				err	= ErrProtocolError
+				err	= ErrIllegalDataValue
 				break
 			}
 			if uint32(addr) + uint32(quantity) - 1 > 0xffff {
@@ -593,7 +593,7 @@ func (ms *ModbusServer) handleTransport(t transport, clientAddr string, clientRo
 			// ensure the reply never exceeds the maximum PDU length and we
 			// never read past 0xffff
 			if quantity > 0x007d || quantity == 0 {
-				err	= ErrProtocolError
+				err	= ErrIllegalDataValue
 				break
 			}
 			if uint32(addr) + uint32(quantity) - 1 > 0xffff {
