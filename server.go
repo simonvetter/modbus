@@ -26,7 +26,11 @@ type ServerConfiguration struct {
 	// be closed if idle for this long)
 	Timeout	      time.Duration
 	// MaxClients sets the maximum number of concurrent client connections
+	// (defaults to 10 if 0).
 	MaxClients    uint
+	// ClientEventsBuffer sets the buffer size of the channel returned by
+	// ModbusServer.ClientEvents() (defaults to 10 if 0).
+	ClientEventsBuffer uint
 	// TLSServerCert sets the server-side TLS key pair (tcp+tls only)
 	TLSServerCert *tls.Certificate
 	// TLSClientCAs sets the list of CA certificates used to authenticate
@@ -36,6 +40,16 @@ type ServerConfiguration struct {
 	// Logger provides a custom sink for log messages.
 	// If nil, messages will be written to stdout.
 	Logger        *log.Logger
+}
+
+// ClientEvent is emitted on ModbusServer.ClientEvents() whenever a client
+// connects or disconnects. Each event carries a full snapshot of the server
+// state, so the most recent event received always reflects the current state.
+type ClientEvent struct {
+	Connected  bool     // true if Addr connected, false if it disconnected
+	Addr       string   // remote address of the client that (dis)connected
+	Clients    []string // remote addresses of all connected clients after the event
+	MaxClients uint     // effective maximum number of concurrent clients
 }
 
 // Request object passed to the coil handler.
@@ -149,6 +163,9 @@ type ModbusServer struct {
 	tcpListener	net.Listener
 	tcpClients	[]net.Conn
 	transportType	transportType
+	clientEvents	chan ClientEvent
+	// serializes event publication; always acquired while holding lock
+	eventLock	sync.Mutex
 }
 
 // Returns a new modbus server.
@@ -172,6 +189,11 @@ func NewServer(conf *ServerConfiguration, reqHandler RequestHandler) (
 
 	ms.logger = newLogger(
 		fmt.Sprintf("modbus-server(%s)", ms.conf.URL), ms.conf.Logger)
+
+	if ms.conf.ClientEventsBuffer == 0 {
+		ms.conf.ClientEventsBuffer = 10
+	}
+	ms.clientEvents = make(chan ClientEvent, ms.conf.ClientEventsBuffer)
 
 	if ms.conf.URL == "" {
 		ms.logger.Errorf("missing host part in URL '%s'", conf.URL)
@@ -279,6 +301,84 @@ func (ms *ModbusServer) Stop() (err error) {
 	return
 }
 
+// ClientEvents returns a channel on which a ClientEvent is published every time
+// a client connects or disconnects (connections rejected because of the
+// MaxClients limit do not generate events).
+// Publishing never blocks: if the buffer is full, the oldest pending event is
+// dropped in favor of the new one.
+// The channel is never closed (the server can be restarted), so read it with
+// a select statement rather than a for-range loop.
+// With TLS, clients are counted as soon as the TCP connection is accepted,
+// i.e. before the TLS handshake completes.
+func (ms *ModbusServer) ClientEvents() <-chan ClientEvent {
+	return ms.clientEvents
+}
+
+// ConnectedClients returns the remote addresses of all connected clients.
+func (ms *ModbusServer) ConnectedClients() []string {
+	ms.lock.Lock()
+	defer ms.lock.Unlock()
+
+	return ms.clientAddrs()
+}
+
+// ConnectedClientsCount returns the number of connected clients.
+func (ms *ModbusServer) ConnectedClientsCount() uint {
+	ms.lock.Lock()
+	defer ms.lock.Unlock()
+
+	return uint(len(ms.tcpClients))
+}
+
+// MaxClients returns the effective maximum number of concurrent clients
+// (10 if ServerConfiguration.MaxClients was left at 0).
+func (ms *ModbusServer) MaxClients() uint {
+	return ms.conf.MaxClients
+}
+
+// Returns the remote addresses of all connected clients.
+// Must be called with ms.lock held.
+func (ms *ModbusServer) clientAddrs() (addrs []string) {
+	addrs = make([]string, 0, len(ms.tcpClients))
+	for _, sock := range ms.tcpClients {
+		addrs = append(addrs, sock.RemoteAddr().String())
+	}
+
+	return
+}
+
+// Builds a client event while ms.lock is held, then publishes it once ms.lock
+// is released. Must be called with ms.lock held; releases it.
+func (ms *ModbusServer) publishClientEventAndUnlock(connected bool, addr string) {
+	var ev ClientEvent
+
+	ev = ClientEvent{
+		Connected:	connected,
+		Addr:		addr,
+		Clients:	ms.clientAddrs(),
+		MaxClients:	ms.conf.MaxClients,
+	}
+
+	// taking eventLock before releasing lock keeps events in state order
+	ms.eventLock.Lock()
+	ms.lock.Unlock()
+	defer ms.eventLock.Unlock()
+
+	for {
+		select {
+		case ms.clientEvents <- ev:
+			return
+		default:
+		}
+
+		// buffer full: drop the oldest event and retry
+		select {
+		case <-ms.clientEvents:
+		default:
+		}
+	}
+}
+
 // Accepts new client connections if the configured connection limit allows it.
 // Each connection is served from a dedicated goroutine to allow for concurrent
 // connections.
@@ -305,10 +405,11 @@ func (ms *ModbusServer) acceptTCPClients() {
 			accepted = true
 			// add the new client connection to the pool
 			ms.tcpClients = append(ms.tcpClients, sock)
+			ms.publishClientEventAndUnlock(true, sock.RemoteAddr().String())
 		} else {
 			accepted = false
+			ms.lock.Unlock()
 		}
-		ms.lock.Unlock()
 
 		if accepted {
 			// spin a client handler goroutine to serve the new client
@@ -333,6 +434,7 @@ func (ms *ModbusServer) handleTCPClient(sock net.Conn) {
 	var err        error
 	var clientRole string
 	var tlsSock    net.Conn
+	var removed    bool
 
 	switch ms.transportType {
 	case modbusTCP:
@@ -360,14 +462,20 @@ func (ms *ModbusServer) handleTCPClient(sock net.Conn) {
 
 	// once done, remove our connection from the list of active client conns
 	ms.lock.Lock()
+	removed = false
 	for i := range ms.tcpClients {
 		if ms.tcpClients[i] == sock {
 			ms.tcpClients[i] = ms.tcpClients[len(ms.tcpClients)-1]
 			ms.tcpClients	 = ms.tcpClients[:len(ms.tcpClients)-1]
+			removed = true
 			break
 		}
 	}
-	ms.lock.Unlock()
+	if removed {
+		ms.publishClientEventAndUnlock(false, sock.RemoteAddr().String())
+	} else {
+		ms.lock.Unlock()
+	}
 
 	// close the connection
 	sock.Close()

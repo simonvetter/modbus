@@ -568,6 +568,173 @@ func TestTCPServerHoldingAndInputRegisters(t *testing.T) {
 	return
 }
 
+func waitClientEvent(t *testing.T, server *ModbusServer) (ev ClientEvent) {
+	t.Helper()
+
+	select {
+	case ev = <-server.ClientEvents():
+	case <-time.After(time.Second):
+		t.Fatalf("timed out waiting for a client event")
+	}
+
+	return
+}
+
+func TestTCPServerClientEvents(t *testing.T) {
+	var server  *ModbusServer
+	var err     error
+	var ev      ClientEvent
+	var clients []string
+	var c       [3]*ModbusClient
+
+	server, err = NewServer(&ServerConfiguration{
+		URL:		"tcp://localhost:5506",
+		MaxClients:	2,
+	}, &tcpTestHandler{})
+	if err != nil {
+		t.Fatalf("failed to create server: %v", err)
+	}
+
+	if server.MaxClients() != 2 {
+		t.Errorf("expected MaxClients() to return 2, got: %v", server.MaxClients())
+	}
+
+	err = server.Start()
+	if err != nil {
+		t.Fatalf("failed to start server: %v", err)
+	}
+
+	for i := range c {
+		c[i], err = NewClient(&ClientConfiguration{
+			URL:	"tcp://localhost:5506",
+		})
+		if err != nil {
+			t.Fatalf("failed to create client: %v", err)
+		}
+	}
+
+	// connect 2 clients
+	for i := 0; i < 2; i++ {
+		err = c[i].Open()
+		if err != nil {
+			t.Fatalf("c%v.Open() should have succeeded, got: %v", i, err)
+		}
+
+		ev = waitClientEvent(t, server)
+		if !ev.Connected || len(ev.Clients) != i + 1 || ev.MaxClients != 2 {
+			t.Errorf("unexpected connect event: %+v", ev)
+		}
+	}
+
+	if server.ConnectedClientsCount() != 2 {
+		t.Errorf("expected 2 connected clients, got: %v",
+			 server.ConnectedClientsCount())
+	}
+	clients = server.ConnectedClients()
+	if len(clients) != 2 || clients[0] == "" || clients[1] == "" {
+		t.Errorf("unexpected ConnectedClients(): %v", clients)
+	}
+
+	// a 3rd client exceeds MaxClients and must not generate an event
+	c[2].Open()
+	select {
+	case ev = <-server.ClientEvents():
+		t.Errorf("rejected connection should not generate an event, got: %+v", ev)
+	case <-time.After(50 * time.Millisecond):
+	}
+	if server.ConnectedClientsCount() != 2 {
+		t.Errorf("expected 2 connected clients, got: %v",
+			 server.ConnectedClientsCount())
+	}
+
+	// disconnect client #1
+	c[0].Close()
+	ev = waitClientEvent(t, server)
+	if ev.Connected || len(ev.Clients) != 1 || ev.Addr == ev.Clients[0] {
+		t.Errorf("unexpected disconnect event: %+v", ev)
+	}
+
+	// stopping the server disconnects the remaining client
+	server.Stop()
+	ev = waitClientEvent(t, server)
+	if ev.Connected || len(ev.Clients) != 0 {
+		t.Errorf("unexpected disconnect event: %+v", ev)
+	}
+	if server.ConnectedClientsCount() != 0 {
+		t.Errorf("expected 0 connected clients, got: %v",
+			 server.ConnectedClientsCount())
+	}
+
+	c[1].Close()
+	c[2].Close()
+
+	return
+}
+
+func TestTCPServerClientEventsDropOldest(t *testing.T) {
+	var server *ModbusServer
+	var err    error
+	var ev     ClientEvent
+	var c      [3]*ModbusClient
+
+	server, err = NewServer(&ServerConfiguration{
+		URL:			"tcp://localhost:5507",
+		ClientEventsBuffer:	1,
+	}, &tcpTestHandler{})
+	if err != nil {
+		t.Fatalf("failed to create server: %v", err)
+	}
+
+	if server.MaxClients() != 10 {
+		t.Errorf("expected MaxClients() to default to 10, got: %v",
+			 server.MaxClients())
+	}
+
+	err = server.Start()
+	if err != nil {
+		t.Fatalf("failed to start server: %v", err)
+	}
+	defer server.Stop()
+
+	// connect 3 clients without reading events
+	for i := range c {
+		c[i], err = NewClient(&ClientConfiguration{
+			URL:	"tcp://localhost:5507",
+		})
+		if err != nil {
+			t.Fatalf("failed to create client: %v", err)
+		}
+		err = c[i].Open()
+		if err != nil {
+			t.Fatalf("c%v.Open() should have succeeded, got: %v", i, err)
+		}
+		defer c[i].Close()
+	}
+
+	for i := 0; server.ConnectedClientsCount() != 3; i++ {
+		if i == 100 {
+			t.Fatalf("expected 3 connected clients, got: %v",
+				 server.ConnectedClientsCount())
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	time.Sleep(20 * time.Millisecond)
+
+	// only the most recent event should have been kept
+	ev = waitClientEvent(t, server)
+	if !ev.Connected || len(ev.Clients) != 3 {
+		t.Errorf("expected the latest event with 3 clients, got: %+v", ev)
+	}
+
+	select {
+	case ev = <-server.ClientEvents():
+		t.Errorf("expected no more pending events, got: %+v", ev)
+	default:
+	}
+
+	return
+}
+
 type tcpTestHandler struct {
 	coils	[10]bool
 	di	[10]bool
